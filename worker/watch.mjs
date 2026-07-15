@@ -21,9 +21,15 @@ const cfg = {
   input: process.env.CF_INPUT || "./input",
   output: process.env.CF_OUTPUT || "./output",
   style: process.env.CF_STYLE || "folktale3d",
-  sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 6),
+  sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 3.5),
   // Ken Burns zoom strength. Subtle by default so shots feel natural, not pushed in.
   zoom: Number(process.env.CF_ZOOM || 0.06),
+  // Output resolution and quality. 1080p with a low CRF for crisp video.
+  width: Number(process.env.CF_WIDTH || 1920),
+  height: Number(process.env.CF_HEIGHT || 1080),
+  crf: Number(process.env.CF_CRF || 20),
+  // Words per second, used only to estimate how many words make one ~target-second scene.
+  wps: Number(process.env.CF_WPS || 2.4),
   imageBase: process.env.CF_IMAGE_BASE || "https://image.pollinations.ai/prompt",
   imageModel: process.env.CF_IMAGE_MODEL || "flux",
   imageToken: process.env.CF_IMAGE_TOKEN || "",

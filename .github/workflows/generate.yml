@@ -21,8 +21,8 @@ jobs:
       CF_INPUT: ${{ github.workspace }}/content
       CF_OUTPUT: ${{ github.workspace }}/_render
       CF_STYLE: folktale3d
-      # Each scene ~6s, timed to the narration. Long scripts scale to long videos.
-      CF_SCENE_SECONDS: "6"
+      # Each scene ~3.5s, synced to its own narration. Long scripts scale to long videos.
+      CF_SCENE_SECONDS: "3.5"
       CF_IMG_CONCURRENCY: "4"
       # Free Nigerian narration
       CF_TTS_PROVIDER: edge

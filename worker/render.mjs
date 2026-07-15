@@ -34,7 +34,10 @@ function probeDuration(file, cfg) {
 // ---------- asset fetching ----------
 async function fetchImage(prompt, seed, outPath, cfg) {
   const token = cfg.imageToken ? "&token=" + encodeURIComponent(cfg.imageToken) : "";
-  const url = cfg.imageBase + "/" + encodeURIComponent(prompt) + "?width=1280&height=720&nologo=true&model=" + cfg.imageModel + "&seed=" + seed + token;
+  const w = Number(cfg.width) || 1920, h = Number(cfg.height) || 1080;
+  // Higher resolution + prompt enhancement for sharper, more detailed frames.
+  const url = cfg.imageBase + "/" + encodeURIComponent(prompt) +
+    "?width=" + w + "&height=" + h + "&nologo=true&enhance=true&model=" + cfg.imageModel + "&seed=" + seed + token;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const r = await fetch(url);
@@ -163,15 +166,49 @@ async function fetchMusic(url, outPath) {
 // times faster, so videos with many scenes render in minutes, not hours.
 // The zoom is kept subtle (default 6%) and alternates direction per scene so the
 // motion feels natural and cinematic rather than pushed in too far. Tune with CF_ZOOM.
-function kenBurnsClip(imgPath, outPath, dur, cfg, idx = 0) {
+function kenBurnsVf(dur, cfg, idx) {
   const D = Math.max(0.1, dur);
+  const W = Number(cfg.width) || 1920, H = Number(cfg.height) || 1080;
   const zoom = Math.min(0.2, Math.max(0, Number(cfg.zoom) || 0.06));
   const hi = (1 + zoom).toFixed(3);
   const z = (idx % 2 === 0) ? "(1+" + zoom + "*t/" + D + ")" : "(" + hi + "-" + zoom + "*t/" + D + ")";
-  const vf =
-    "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720," +
-    "scale=w='1280*" + z + "':h='720*" + z + "':eval=frame,crop=1280:720,format=yuv420p";
-  return run(cfg.ffmpeg, ["-y", "-loop", "1", "-t", String(dur), "-i", imgPath, "-vf", vf, "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", outPath]);
+  return "scale=" + W + ":" + H + ":force_original_aspect_ratio=increase,crop=" + W + ":" + H + "," +
+    "scale=w='" + W + "*" + z + "':h='" + H + "*" + z + "':eval=frame,crop=" + W + ":" + H + ",format=yuv420p";
+}
+
+function kenBurnsClip(imgPath, outPath, dur, cfg, idx = 0) {
+  const crf = String(Number(cfg.crf) || 20);
+  return run(cfg.ffmpeg, ["-y", "-loop", "1", "-t", String(dur), "-i", imgPath, "-vf", kenBurnsVf(dur, cfg, idx), "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", crf, "-pix_fmt", "yuv420p", outPath]);
+}
+
+// A self-contained scene clip: the image (with Ken Burns motion) plus THIS scene's
+// own narration muxed in, both the same length. Because each image and its narration
+// live in the same clip, they can never drift apart when the clips are joined, so the
+// pictures stay locked to the voice for the whole video. If a scene has no narration,
+// a matching stretch of silence is used so every clip has an identical audio layout.
+function sceneClipWithAudio(imgPath, audioPath, outPath, dur, cfg, idx = 0) {
+  const crf = String(Number(cfg.crf) || 20);
+  const args = ["-y", "-loop", "1", "-t", String(dur), "-i", imgPath];
+  if (audioPath) args.push("-i", audioPath);
+  else args.push("-f", "lavfi", "-t", String(dur), "-i", "anullsrc=channel_layout=mono:sample_rate=24000");
+  args.push(
+    "-vf", kenBurnsVf(dur, cfg, idx),
+    "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", crf, "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "160k", "-ar", "24000", "-ac", "1",
+    "-map", "0:v:0", "-map", "1:a:0", "-t", String(dur), outPath
+  );
+  return run(cfg.ffmpeg, args);
+}
+
+// Mix looping background music UNDER a video that already has a narration track.
+async function mixMusicUnder(videoWithNarration, music, total, outPath, cfg) {
+  const args = ["-y", "-i", videoWithNarration, "-stream_loop", "-1", "-i", music,
+    "-filter_complex", "[1:a]volume=0.3[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]",
+    "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-t", String(total), outPath];
+  await run(cfg.ffmpeg, args);
+  const st = await fs.stat(outPath).catch(() => null);
+  if (!st || st.size < 1000) throw new Error("music mix produced no output");
+  return outPath;
 }
 
 // Join clips with clean hard cuts, no re-encode. Scales to any number of clips.
@@ -186,9 +223,10 @@ async function fastConcat(clips, outPath, cfg) {
   try {
     await run(cfg.ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outPath]);
   } catch (e) {
-    // fallback: re-encode on join, which tolerates any small differences between clips
+    // fallback: re-encode on join, which tolerates any small differences between clips.
+    // Keep the audio track (scene clips carry narration) so sound is never dropped.
     cfg.log("  fast join fell back to a re-encode");
-    await run(cfg.ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", outPath]);
+    await run(cfg.ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", String(Number(cfg.crf) || 20), "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", outPath]);
   }
   const st = await fs.stat(outPath).catch(() => null);
   if (!st || st.size < 1000) throw new Error("join produced no output");
@@ -286,29 +324,15 @@ export async function renderJob(job, cfg, workDir, outFile) {
   await fs.mkdir(workDir, { recursive: true });
   const style = styleKeywords[job.style] ? job.style : cfg.style;
 
-  // Narrate FIRST, so we know the exact audio length before choosing scenes. This
-  // lets us cut the script into (duration / target-seconds) scenes, giving every
-  // scene the same target length (about CF_SCENE_SECONDS, default 6s) and keeping
-  // the pictures in step with the voice. It also scales cleanly to long videos:
-  // a one hour narration simply becomes about 600 six second scenes.
-  let narration = null, total = null;
-  if (cfg.ttsEnabled) {
-    const np = path.join(workDir, "voice.mp3");
-    if (await fetchTTS(job.script, job.voice, np, cfg)) { narration = np; total = await probeDuration(np, cfg); }
-  }
-
-  const targetSec = Math.max(2, Number(cfg.sceneSeconds) || 6);
+  // Cut the script into short scenes of about the target length. The final duration
+  // of each scene comes from its own narration below, so the pictures stay locked to
+  // the voice; this word estimate only sets roughly how much text each scene covers.
+  const targetSec = Math.max(1.5, Number(cfg.sceneSeconds) || 3.5);
   const MAX_SCENES = Number(process.env.CF_MAX_SCENES || 800);
-  let scenes;
-  if (total) {
-    const words = job.script.trim().split(/\s+/).filter(Boolean).length;
-    const sceneCount = Math.max(1, Math.min(MAX_SCENES, Math.round(total / targetSec)));
-    const targetWords = Math.max(3, Math.ceil(words / sceneCount));
-    scenes = splitScript(job.script, targetWords);
-    cfg.log("  narration " + total.toFixed(1) + "s, aiming for ~" + targetSec + "s scenes (" + scenes.length + " scenes)");
-  } else {
-    scenes = splitScript(job.script);
-  }
+  const targetWords = Math.max(3, Math.round(targetSec * (Number(cfg.wps) || 2.4)));
+  let scenes = splitScript(job.script, targetWords);
+  if (scenes.length > MAX_SCENES) scenes = scenes.slice(0, MAX_SCENES);
+  cfg.log("  " + scenes.length + " scenes, aiming for ~" + targetSec + "s each, synced to the voice");
 
   // Character bible: keep the main characters looking the same across scenes.
   let bible = null;
@@ -351,34 +375,64 @@ export async function renderJob(job, cfg, workDir, outFile) {
   if (job.music) music = await fetchMusic(job.music, path.join(workDir, "music.bin"));
   else if (cfg.music) music = cfg.music;
 
-  // Each scene runs for the narration length divided evenly across the images, which
-  // lands at about the target seconds per scene and stays locked to the voice.
-  const dur = total ? Math.max(2, total / imgs.length) : targetSec;
-  // never let the final length cut off the visuals (matters only if narration is very short)
-  total = Math.max(total || 0, imgs.length * dur);
-  const TR = 0.6;
+  // Per-scene narration: narrate EACH scene on its own so we know exactly how long
+  // its line takes to speak. That per-scene length becomes the scene's on-screen time,
+  // which is what keeps every picture in step with the audio, with no drift.
+  const audios = new Array(scenes.length).fill(null);
+  const durs = new Array(scenes.length).fill(targetSec);
+  if (cfg.ttsEnabled) {
+    const TCONC = Math.max(1, Number(process.env.CF_TTS_CONCURRENCY || 4));
+    let tn = 0, td = 0;
+    async function ttsWorker() {
+      while (true) {
+        const i = tn++;
+        if (i >= scenes.length) return;
+        if (!results[i]) continue; // image failed for this scene, it will be dropped
+        const ap = path.join(workDir, "voice" + i + ".mp3");
+        if (await fetchTTS(scenes[i], job.voice, ap, cfg)) {
+          const d = await probeDuration(ap, cfg);
+          if (d) { audios[i] = ap; durs[i] = Math.max(1.0, d); }
+        }
+        td++;
+        if (td % 20 === 0 || td === scenes.length) cfg.log("  narration " + td + "/" + scenes.length);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(TCONC, scenes.length) }, ttsWorker));
+  }
+  const haveAudio = cfg.ttsEnabled;
 
-  cfg.log("  rendering " + imgs.length + " scenes with ffmpeg");
+  // Build one self-contained clip per scene (image + its own narration), then join.
+  cfg.log("  rendering " + imgs.length + " scenes at " + (cfg.width || 1920) + "x" + (cfg.height || 1080));
   const clips = [];
-  for (let i = 0; i < imgs.length; i++) {
+  let total = 0;
+  for (let i = 0; i < scenes.length; i++) {
+    if (!results[i]) continue;
     const c = path.join(workDir, "clip" + i + ".mp4");
     try {
-      await kenBurnsClip(imgs[i], c, dur, cfg, i);
+      if (haveAudio) await sceneClipWithAudio(results[i], audios[i], c, durs[i], cfg, i);
+      else await kenBurnsClip(results[i], c, durs[i], cfg, i);
       const st = await fs.stat(c);
-      if (st.size > 1000) clips.push(c);
+      if (st.size > 1000) { clips.push(c); total += durs[i]; }
     } catch (e) {
       cfg.log("  scene clip " + (i + 1) + " skipped: " + String(e.message).slice(0, 90));
     }
   }
   if (!clips.length) throw new Error("no clips were rendered");
-  const silent = path.join(workDir, "silent.mp4");
-  await crossfadeConcat(clips, silent, dur, TR, cfg);
 
-  // A narrated documentary must have its audio. If muxAudio cannot attach the
-  // narration it throws, and this whole video is treated as failed (not uploaded)
-  // so it gets retried, rather than ever saving or publishing a silent video.
-  if (narration || music) await muxAudio(silent, narration, music, outFile, total, cfg);
-  else await fs.copyFile(silent, outFile);
+  if (haveAudio) {
+    // Each clip already carries its own narration, so a plain hard-cut join keeps the
+    // voice perfectly in sync. Then mix any background music under the whole thing.
+    const joined = music ? path.join(workDir, "joined.mp4") : outFile;
+    await fastConcat(clips, joined, cfg);
+    if (music) await mixMusicUnder(joined, music, total, outFile, cfg);
+    if (!(await hasAudioStream(outFile, cfg))) throw new Error("the narration did not attach to the video");
+  } else {
+    // No narration: use gentle crossfades and lay any music underneath.
+    const silent = path.join(workDir, "silent.mp4");
+    await crossfadeConcat(clips, silent, durs[0] || targetSec, 0.6, cfg);
+    if (music) await muxAudio(silent, null, music, outFile, total, cfg);
+    else await fs.copyFile(silent, outFile);
+  }
 
   // Auto thumbnail: a bold, professional 1280x720 image that matches the video.
   if (cfg.thumbnails) {
