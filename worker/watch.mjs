@@ -21,7 +21,7 @@ const cfg = {
   input: process.env.CF_INPUT || "./input",
   output: process.env.CF_OUTPUT || "./output",
   style: process.env.CF_STYLE || "folktale3d",
-  sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 4),
+  sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 6),
   imageBase: process.env.CF_IMAGE_BASE || "https://image.pollinations.ai/prompt",
   imageModel: process.env.CF_IMAGE_MODEL || "flux",
   imageToken: process.env.CF_IMAGE_TOKEN || "",

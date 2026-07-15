@@ -46,7 +46,9 @@ jobs:
       CF_INPUT: ${{ github.workspace }}/content
       CF_OUTPUT: ${{ github.workspace }}/_render
       CF_STYLE: folktale3d
-      CF_SCENE_WORDS: "18"
+      # Each scene ~6s, timed to the narration. Long scripts scale to long videos.
+      CF_SCENE_SECONDS: "6"
+      CF_IMG_CONCURRENCY: "4"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)
       CF_TTS_PROVIDER: edge
       CF_EDGE_VOICE: en-NG-EzinneNeural

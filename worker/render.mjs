@@ -281,8 +281,31 @@ async function muxAudio(video, narration, music, outPath, total, cfg) {
 // ---------- orchestration ----------
 export async function renderJob(job, cfg, workDir, outFile) {
   await fs.mkdir(workDir, { recursive: true });
-  const scenes = splitScript(job.script);
   const style = styleKeywords[job.style] ? job.style : cfg.style;
+
+  // Narrate FIRST, so we know the exact audio length before choosing scenes. This
+  // lets us cut the script into (duration / target-seconds) scenes, giving every
+  // scene the same target length (about CF_SCENE_SECONDS, default 6s) and keeping
+  // the pictures in step with the voice. It also scales cleanly to long videos:
+  // a one hour narration simply becomes about 600 six second scenes.
+  let narration = null, total = null;
+  if (cfg.ttsEnabled) {
+    const np = path.join(workDir, "voice.mp3");
+    if (await fetchTTS(job.script, job.voice, np, cfg)) { narration = np; total = await probeDuration(np, cfg); }
+  }
+
+  const targetSec = Math.max(2, Number(cfg.sceneSeconds) || 6);
+  const MAX_SCENES = Number(process.env.CF_MAX_SCENES || 800);
+  let scenes;
+  if (total) {
+    const words = job.script.trim().split(/\s+/).filter(Boolean).length;
+    const sceneCount = Math.max(1, Math.min(MAX_SCENES, Math.round(total / targetSec)));
+    const targetWords = Math.max(3, Math.ceil(words / sceneCount));
+    scenes = splitScript(job.script, targetWords);
+    cfg.log("  narration " + total.toFixed(1) + "s, aiming for ~" + targetSec + "s scenes (" + scenes.length + " scenes)");
+  } else {
+    scenes = splitScript(job.script);
+  }
 
   // Character bible: keep the main characters looking the same across scenes.
   let bible = null;
@@ -321,17 +344,13 @@ export async function renderJob(job, cfg, workDir, outFile) {
   const imgs = results.filter(Boolean);
   if (!imgs.length) throw new Error("no images were generated");
 
-  let narration = null, total = null;
-  if (cfg.ttsEnabled) {
-    const np = path.join(workDir, "voice.mp3");
-    if (await fetchTTS(job.script, job.voice, np, cfg)) { narration = np; total = await probeDuration(np, cfg); }
-  }
-
   let music = null;
   if (job.music) music = await fetchMusic(job.music, path.join(workDir, "music.bin"));
   else if (cfg.music) music = cfg.music;
 
-  const dur = total ? Math.max(2, total / imgs.length) : cfg.sceneSeconds;
+  // Each scene runs for the narration length divided evenly across the images, which
+  // lands at about the target seconds per scene and stays locked to the voice.
+  const dur = total ? Math.max(2, total / imgs.length) : targetSec;
   // never let the final length cut off the visuals (matters only if narration is very short)
   total = Math.max(total || 0, imgs.length * dur);
   const TR = 0.6;

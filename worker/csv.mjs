@@ -76,12 +76,14 @@ export function jobsFromCSV(text) {
 // Break a script into many scenes. It splits into sentences, then groups about
 // one to two sentences per scene using a word target, so a long script yields
 // lots of scenes rather than a few very long ones. Tunable with CF_SCENE_WORDS.
-export function splitScript(text) {
+export function splitScript(text, targetWordsOverride) {
   text = text.trim().replace(/[ \t]+/g, " ").replace(/\n+/g, " ");
   // break into clause level pieces at sentence enders AND commas, for fine control
   let pieces = text.split(/(?<=[.!?,;:])\s+/).map((s) => s.trim()).filter(Boolean);
   if (pieces.length < 2) pieces = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-  const TARGET = Number(process.env.CF_SCENE_WORDS || 30); // words per scene
+  // words per scene: an explicit override (used to hit a target seconds-per-scene once
+  // the narration length is known) wins over the CF_SCENE_WORDS setting.
+  const TARGET = Math.max(3, Number(targetWordsOverride) || Number(process.env.CF_SCENE_WORDS || 30));
   const parts = [];
   let cur = "", words = 0;
   for (const p of pieces) {
