@@ -7,9 +7,10 @@ a **warm 3D animated African folktale**, in the spirit of a Pixar / DreamWorks f
 
 - **Medium:** 3D animated feature-film still, soft global illumination, subsurface skin
   shading, shallow depth of field. Wholesome and heartwarming, never photorealistic.
-- **Light & mood:** golden-hour dusk, a lavender-and-pink sky, long warm light.
+- **Light & mood:** bright, warm natural daylight with soft even front lighting, so
+  characters are always clearly lit and easy to see (no dark silhouettes or heavy backlight).
 - **Setting:** a timeless rural West African village — thatched-roof huts, packed-earth
-  paths, acacia trees, distant hazy mountains.
+  paths, acacia trees, gentle green hills under a bright sky.
 - **Wardrobe & props:** richly textured handwoven robes, carved wood, leather satchels,
   walking staffs, beadwork.
 - **People:** warm dark skin, expressive stylized features, dignified and characterful.

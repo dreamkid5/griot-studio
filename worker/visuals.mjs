@@ -43,11 +43,12 @@ export async function buildSceneVisuals(scenes, bible, cfg) {
     const batch = scenes.slice(start, start + BATCH);
     const numbered = batch.map((s, k) => (start + k + 1) + ". " + s).join("\n");
     const prompt =
-      "You are the visual director for a narrated African folktale rendered as a warm 3D animated film in the style of a Pixar or DreamWorks feature, set in a timeless rural African village at golden dusk.\n\n" +
+      "You are the visual director for a narrated African folktale rendered as a warm 3D animated film in the style of a Pixar or DreamWorks feature, set in a timeless rural African village in bright, warm daylight.\n\n" +
       charBlock +
       "Below are numbered narration segments. For EACH number, write ONE concrete visual image prompt describing what an illustrator should draw for that exact moment: a clear main subject, the setting, the action, and the mood, all matching the meaning of the narration. Rules:\n" +
       "- Translate the meaning into a picture. Do NOT just repeat the narration words.\n" +
       "- Framing: favor balanced, natural compositions. Use mostly WIDE and MEDIUM shots that show the character within their surroundings, with room around them. Reserve close-ups for rare emotional beats. Never describe an extreme close-up or a tightly cropped face.\n" +
+      "- Lighting: keep every scene BRIGHT and the character clearly and fully lit and easy to see. Prefer daytime and well-lit settings. Do NOT put the character in shadow, silhouette, or heavy backlight. For a night or indoor moment, light the character with warm firelight, lamplight, or bright moonlight so their face and clothing are still clearly visible.\n" +
       "- When a main character appears, describe them using their fixed look above.\n" +
       "- For abstract, rhetorical, or transitional lines, pick a fitting symbolic or atmospheric image from the story's own world (a place, an object, a moment) rather than something literal.\n" +
       "- Never put on-screen text, captions, letters, or numbers in the image.\n" +
