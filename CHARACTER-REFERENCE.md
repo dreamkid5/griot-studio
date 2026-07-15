@@ -36,6 +36,6 @@ description you can paste into any script:
 
 ## Voice
 
-Narration is a professional **Nigerian English** neural voice from Microsoft Azure —
+Narration is a professional **Nigerian English** neural voice, free via `edge-tts` —
 `en-NG-EzinneNeural` (female storyteller) by default, or `en-NG-AbeoNeural` (male elder),
-delivered at a warm, measured griot cadence. See `worker/SETUP-AZURE-NIGERIAN.md`.
+delivered at a warm, measured griot cadence. No key or cost. See `worker/SETUP-VOICE.md`.

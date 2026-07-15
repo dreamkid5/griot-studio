@@ -7,10 +7,11 @@ name: Publish folktales to YouTube
 #   3. The published script is moved to content/published/ and the upload ledger
 #      (content/.cf-uploaded.json) is committed back, so a tale is never made twice.
 #
+# Narration is FREE via edge-tts (Microsoft Edge neural voices) — no key needed.
+#
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   AZURE_SPEECH_KEY, AZURE_SPEECH_REGION   Nigerian narration (Microsoft Azure)
-#   ANTHROPIC_API_KEY                       SEO + character consistency (Claude)
 #   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN   YouTube auto-upload
+#   ANTHROPIC_API_KEY                       (recommended) SEO + character consistency (Claude, ~1c/video)
 #   CF_IMAGE_TOKEN                          (optional) Pollinations token, higher limits
 # Optional repo variable:
 #   CF_YT_PRIVACY   public | unlisted | private   (default: private)
@@ -42,13 +43,11 @@ jobs:
       CF_OUTPUT: ${{ github.workspace }}/_render
       CF_STYLE: folktale3d
       CF_SCENE_WORDS: "18"
-      # Voice — professional Nigerian English (Microsoft Azure)
-      CF_TTS_PROVIDER: azure
-      CF_AZURE_VOICE: en-NG-EzinneNeural
-      CF_AZURE_RATE: "-6%"
-      CF_AZURE_PITCH: "-2%"
-      AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
-      AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+      # Voice — FREE Nigerian English via edge-tts (no key, no card)
+      CF_TTS_PROVIDER: edge
+      CF_EDGE_VOICE: en-NG-EzinneNeural
+      CF_EDGE_RATE: "-6%"
+      CF_EDGE_PITCH: "-2Hz"
       # Claude — SEO, character bible, scene matching
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CF_SEO_MODEL: claude-haiku-4-5-20251001
@@ -72,6 +71,9 @@ jobs:
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install edge-tts (free Nigerian narration)
+        run: python3 -m pip install --upgrade edge-tts
 
       - name: Render new folktales and upload to YouTube
         working-directory: worker

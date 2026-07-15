@@ -1,13 +1,13 @@
 # Griot Studio
 
-A professional YouTube automation suite for **African folktale** channels, built with Astro. Write a tale, and Griot Studio narrates it in a **Nigerian voice**, illustrates it in a warm **3D animated folktale** look, writes the SEO, and publishes it to YouTube — one clean workspace to plan, produce, schedule, and track videos.
+A professional YouTube automation suite for **African folktale** channels, built with Astro. Write a tale, and Griot Studio narrates it in a **free Nigerian voice**, illustrates it in a warm **3D animated folktale** look, writes the SEO, and publishes it to YouTube — one clean workspace to plan, produce, schedule, and track videos.
 
 **Two ways to publish:**
 
 - **From GitHub (hands-off):** drop a folktale script in [`content/`](content/), push, and GitHub Actions renders and uploads it to YouTube automatically. See [PUBLISH-ON-GITHUB.md](PUBLISH-ON-GITHUB.md).
 - **From the app / your Mac:** use the Auto Video and Bulk Studio pages, or the background [`worker`](worker/README.md).
 
-The signature look and the recurring elder-griot narrator are described in [CHARACTER-REFERENCE.md](CHARACTER-REFERENCE.md). The Nigerian narration voice is set up in [worker/SETUP-AZURE-NIGERIAN.md](worker/SETUP-AZURE-NIGERIAN.md).
+The signature look and the recurring elder-griot narrator are described in [CHARACTER-REFERENCE.md](CHARACTER-REFERENCE.md). The free Nigerian narration voice is set up in [worker/SETUP-VOICE.md](worker/SETUP-VOICE.md).
 
 ## What is inside
 
@@ -60,9 +60,9 @@ The Thumbnail Studio calls a keyless image model. Requests pass through a same o
 
 ## Voice
 
-Griot Studio narrates in a **professional Nigerian English** neural voice from Microsoft Azure — `en-NG-EzinneNeural` (female storyteller) by default, or `en-NG-AbeoNeural` (male elder), at a warm, measured griot cadence. Azure's free tier covers about 500k characters a month, enough for daily uploads. Full setup: [worker/SETUP-AZURE-NIGERIAN.md](worker/SETUP-AZURE-NIGERIAN.md).
+Griot Studio narrates in a **professional Nigerian English** neural voice — `en-NG-EzinneNeural` (female storyteller) by default, or `en-NG-AbeoNeural` (male elder), at a warm, measured griot cadence. It runs on **`edge-tts`**, the free neural voices built into Microsoft Edge: **no API key, no account, no card, and no per-video cost.** One-time setup is a single `pip install edge-tts`. Full details: [worker/SETUP-VOICE.md](worker/SETUP-VOICE.md).
 
-Image generation and video rendering are fully keyless. Other narration options remain available if you want them:
+Image generation and video rendering are also keyless. Paid options (ElevenLabs, Azure) remain available if you ever want them, but are not needed:
 
 * **Free natural voice**: an open neural voice (Kokoro) that runs on your device in the browser. The small model downloads once, then works offline and needs no key. It plays and is baked into the exported video. Six voices, WebGPU when available.
 * **Local voice server, no card**: a free voice that runs on your own Mac through the `voice-server` folder, wrapping the open Piper engine. No key and no card. Run its `setup.sh` once, start it, set `LOCAL_TTS_URL`, and both the Auto Video Premium option and the worker use it. Clear and fast, a step above the browser voice.

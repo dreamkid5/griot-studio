@@ -29,6 +29,12 @@ const cfg = {
   ttsUrl: process.env.CF_TTS_URL || "https://api.openai.com/v1/audio/speech",
   ttsModel: process.env.CF_TTS_MODEL || "gpt-4o-mini-tts",
   ttsVoice: process.env.CF_TTS_VOICE || "nova",
+  // edge-tts: free Microsoft neural voices, NO key, NO card. Nigerian by default.
+  // Invoked as: python3 -m edge_tts. Install once with: pip install edge-tts
+  edgeCmd: process.env.CF_EDGE_CMD || "python3",
+  edgeVoice: process.env.CF_EDGE_VOICE || "en-NG-EzinneNeural",
+  edgeRate: process.env.CF_EDGE_RATE || "-6%",
+  edgePitch: process.env.CF_EDGE_PITCH || "-2Hz",
   // local voice server, free and no card
   localTtsUrl: process.env.LOCAL_TTS_URL || "",
   // premium voice providers, choose by which key is set
@@ -61,8 +67,9 @@ const cfg = {
   log: (m) => console.log(m)
 };
 cfg.ytUpload = process.env.CF_YT_UPLOAD === "0" ? false : !!(cfg.ytClientId && cfg.ytClientSecret && cfg.ytRefreshToken);
-cfg.ttsProvider = process.env.CF_TTS_PROVIDER || (cfg.localTtsUrl ? "local" : cfg.azureKey ? "azure" : cfg.googleKey ? "google" : cfg.elevenKey ? "elevenlabs" : "openai");
-cfg.ttsEnabled = !!(cfg.localTtsUrl || cfg.azureKey || cfg.googleKey || cfg.elevenKey || cfg.ttsKey);
+// Default narration is the free edge-tts Nigerian voice (no key). A provider key still wins if set.
+cfg.ttsProvider = process.env.CF_TTS_PROVIDER || (cfg.localTtsUrl ? "local" : cfg.azureKey ? "azure" : cfg.googleKey ? "google" : cfg.elevenKey ? "elevenlabs" : cfg.ttsKey ? "openai" : "edge");
+cfg.ttsEnabled = cfg.ttsProvider === "edge" ? true : !!(cfg.localTtsUrl || cfg.azureKey || cfg.googleKey || cfg.elevenKey || cfg.ttsKey);
 cfg.seoEnabled = !!cfg.anthropicKey;
 // character consistency: on by default when a Claude key is set, disable with CF_CHARACTERS=0
 cfg.characters = process.env.CF_CHARACTERS === "0" ? false : true;

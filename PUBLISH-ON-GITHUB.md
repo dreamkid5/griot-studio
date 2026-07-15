@@ -40,13 +40,14 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 | Secret | What it is | Get it from |
 | :-- | :-- | :-- |
-| `AZURE_SPEECH_KEY` | Nigerian narration | [worker/SETUP-AZURE-NIGERIAN.md](worker/SETUP-AZURE-NIGERIAN.md) |
-| `AZURE_SPEECH_REGION` | e.g. `eastus` | same |
-| `ANTHROPIC_API_KEY` | SEO + character consistency | console.anthropic.com |
 | `YT_CLIENT_ID` | YouTube OAuth | [GET-API-KEYS.md](GET-API-KEYS.md) |
 | `YT_CLIENT_SECRET` | YouTube OAuth | same |
-| `YT_REFRESH_TOKEN` | YouTube OAuth | same |
+| `YT_REFRESH_TOKEN` | YouTube OAuth (chooses the channel) | same |
+| `ANTHROPIC_API_KEY` | *(recommended)* SEO + character consistency, ~1c/video | console.anthropic.com |
 | `CF_IMAGE_TOKEN` | *(optional)* higher image limits | enter.pollinations.ai |
+
+> **The narration voice needs no secret.** It runs on the free `edge-tts` engine, which the
+> workflow installs automatically. No Azure, no key, no cost.
 
 > You already have working YouTube OAuth values in `worker/.env`
 > (`YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`) — copy those same three values
@@ -65,7 +66,7 @@ the scripts have moved to `content/published/`.
 
 - **No duplicates:** dedup is enforced two ways — the `content/published/` archive and the
   YouTube ledger (`content/.cf-uploaded.json`), which survives even if you rename a video.
-- **Cost:** images are free (Pollinations), narration is Azure's free tier, Claude SEO is a
-  few cents a video on Haiku. YouTube upload is free.
-- **Change the look or voice for the whole channel:** edit `CF_STYLE` / `CF_AZURE_VOICE` in
+- **Cost:** images are free (Pollinations), narration is free (edge-tts), Claude SEO is about a
+  cent a video on Haiku. YouTube upload is free. Running it can be essentially $0.
+- **Change the look or voice for the whole channel:** edit `CF_STYLE` / `CF_EDGE_VOICE` in
   the workflow file, or `styleKeywords.folktale3d` in `worker/csv.mjs`.

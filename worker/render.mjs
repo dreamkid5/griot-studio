@@ -59,6 +59,28 @@ function xmlEscape(s) {
 
 async function fetchTTS(script, voice, outPath, cfg) {
   try {
+    // edge-tts: free Microsoft neural voices, no key and no card. Uses the same
+    // Nigerian voices as Azure (en-NG-EzinneNeural / en-NG-AbeoNeural). Invoked as
+    // `python3 -m edge_tts`. Text is passed via a temp file to avoid arg limits.
+    if (cfg.ttsProvider === "edge") {
+      const name = (voice && /^[a-z]{2}-[A-Z]{2}-/.test(voice)) ? voice : cfg.edgeVoice;
+      const txt = outPath + ".txt";
+      await fs.writeFile(txt, script);
+      try {
+        await run(cfg.edgeCmd || "python3", [
+          "-m", "edge_tts",
+          "--voice", name,
+          "--file", txt,
+          "--write-media", outPath,
+          "--rate=" + (cfg.edgeRate || "+0%"),
+          "--pitch=" + (cfg.edgePitch || "+0Hz")
+        ]);
+      } finally {
+        await fs.rm(txt, { force: true }).catch(() => {});
+      }
+      const st = await fs.stat(outPath).catch(() => null);
+      return !!(st && st.size > 1000);
+    }
     // Local voice server: free, no card, no key, runs on your machine
     if (cfg.ttsProvider === "local" && cfg.localTtsUrl) {
       const r = await fetch(cfg.localTtsUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: script }) });
