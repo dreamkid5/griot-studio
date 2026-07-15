@@ -32,13 +32,17 @@ function probeDuration(file, cfg) {
 }
 
 // ---------- asset fetching ----------
-async function fetchImage(prompt, seed, outPath, cfg) {
+async function fetchImage(prompt, seed, outPath, cfg, opts = {}) {
   const token = cfg.imageToken ? "&token=" + encodeURIComponent(cfg.imageToken) : "";
-  const w = Number(cfg.width) || 1920, h = Number(cfg.height) || 1080;
-  // Higher resolution + prompt enhancement for sharper, more detailed frames.
-  const url = cfg.imageBase + "/" + encodeURIComponent(prompt) +
-    "?width=" + w + "&height=" + h + "&nologo=true&enhance=true&model=" + cfg.imageModel + "&seed=" + seed + token;
-  for (let attempt = 0; attempt < 6; attempt++) {
+  const w = Number(opts.width) || Number(cfg.width) || 1920;
+  const h = Number(opts.height) || Number(cfg.height) || 1080;
+  const attempts = Number(opts.attempts) || 6;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    // Vary the seed on every attempt so a retry generates a genuinely NEW image for
+    // this scene, rather than re-requesting the same one that just failed.
+    const s = seed + attempt * 104729;
+    const url = cfg.imageBase + "/" + encodeURIComponent(prompt) +
+      "?width=" + w + "&height=" + h + "&nologo=true&enhance=true&model=" + cfg.imageModel + "&seed=" + s + token;
     try {
       const r = await fetch(url);
       if (r.ok) {
@@ -368,8 +372,28 @@ export async function renderJob(job, cfg, workDir, outFile) {
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONC, scenes.length) }, imgWorker));
+
+  // Regeneration pass: any scene whose image failed is generated fresh, with a NEW
+  // seed each time (never a reused neighbour). Runs one at a time to be gentle on the
+  // image service; later rounds fall back to 720p, which it almost never refuses, so
+  // every scene ends up with its OWN generated picture.
+  const repairRounds = Number(process.env.CF_IMG_REPAIR_ROUNDS || 8);
+  for (let round = 1; round <= repairRounds; round++) {
+    const missing = [];
+    for (let i = 0; i < scenes.length; i++) if (!results[i]) missing.push(i);
+    if (!missing.length) break;
+    const lowRes = round > 3 ? { width: 1280, height: 720 } : {};
+    cfg.log("  regenerating " + missing.length + " image(s) (round " + round + (round > 3 ? ", 720p" : "") + ")");
+    for (const i of missing) {
+      const p = path.join(workDir, "img" + i + ".jpg");
+      const seed = 500000 + i * 131 + round * 91193;
+      if (await fetchImage(buildPrompt(prompts[i], style), seed, p, cfg, { ...lowRes, attempts: 4 })) results[i] = p;
+    }
+  }
   const imgs = results.filter(Boolean);
   if (!imgs.length) throw new Error("no images were generated");
+  const stillMissing = results.filter((r) => !r).length;
+  if (stillMissing) cfg.log("  note: " + stillMissing + " scene(s) could not get an image and will be skipped");
 
   let music = null;
   if (job.music) music = await fetchMusic(job.music, path.join(workDir, "music.bin"));
@@ -387,8 +411,8 @@ export async function renderJob(job, cfg, workDir, outFile) {
       while (true) {
         const i = tn++;
         if (i >= scenes.length) return;
-        // Narrate every scene, even if its image failed: a fallback image is used
-        // below so the line is never lost and the story stays complete.
+        // Narrate every scene. By now the regeneration pass has given each scene its
+        // own image, so every narrated line has a matching, freshly generated picture.
         const ap = path.join(workDir, "voice" + i + ".mp3");
         if (await fetchTTS(scenes[i], job.voice, ap, cfg)) {
           const d = await probeDuration(ap, cfg);
@@ -402,18 +426,15 @@ export async function renderJob(job, cfg, workDir, outFile) {
   }
   const haveAudio = cfg.ttsEnabled;
 
-  // Build one self-contained clip per scene (image + its own narration), then join.
-  // If a scene's image failed, fall back to the most recent good image (or the first
-  // one) so the scene still plays with its narration and the story is never cut short.
+  // Build one self-contained clip per scene (its OWN image + its own narration), then
+  // join. Each scene uses the image generated for it; the regeneration pass above makes
+  // sure that image exists, so no scene ever borrows another scene's picture.
   cfg.log("  rendering " + scenes.length + " scenes at " + (cfg.width || 1920) + "x" + (cfg.height || 1080));
-  const firstGood = results.find(Boolean) || null;
-  let lastGood = firstGood;
   const clips = [];
   let total = 0;
   for (let i = 0; i < scenes.length; i++) {
-    if (results[i]) lastGood = results[i];
-    const img = results[i] || lastGood;
-    if (!img) continue; // no usable image exists yet (only if the very first images failed)
+    const img = results[i];
+    if (!img) continue; // extremely rare: this one scene could not be generated, skip it
     const c = path.join(workDir, "clip" + i + ".mp4");
     try {
       if (haveAudio) await sceneClipWithAudio(img, audios[i], c, durs[i], cfg, i);
