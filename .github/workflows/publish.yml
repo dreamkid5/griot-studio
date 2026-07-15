@@ -39,6 +39,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     env:
+      # True only once a YouTube channel is connected (YT_REFRESH_TOKEN secret set).
+      # Until then this workflow does nothing — use the "Generate" workflow to make
+      # and download videos without publishing.
+      HAS_YT: ${{ secrets.YT_REFRESH_TOKEN != '' }}
       CF_INPUT: ${{ github.workspace }}/content
       CF_OUTPUT: ${{ github.workspace }}/_render
       CF_STYLE: folktale3d
@@ -61,25 +65,38 @@ jobs:
       CF_THUMBNAILS: "1"
 
     steps:
+      - name: YouTube not connected — skipping
+        if: env.HAS_YT != 'true'
+        run: |
+          echo "::notice::No YT_REFRESH_TOKEN secret set, so no channel is connected yet."
+          echo "This auto-publish workflow does nothing until you connect a YouTube channel."
+          echo "To make videos now, run the 'Generate folktale videos (download only)' workflow."
+
       - name: Check out repository
+        if: env.HAS_YT == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node.js
+        if: env.HAS_YT == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install ffmpeg
+        if: env.HAS_YT == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install edge-tts (free Nigerian narration)
+        if: env.HAS_YT == 'true'
         run: python3 -m pip install --upgrade edge-tts
 
       - name: Render new folktales and upload to YouTube
+        if: env.HAS_YT == 'true'
         working-directory: worker
         run: node watch.mjs --once
 
       - name: Save rendered videos as a downloadable artifact
+        if: env.HAS_YT == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: folktale-videos
@@ -91,6 +108,7 @@ jobs:
             _render/*.txt
 
       - name: Commit published tales and ledger
+        if: env.HAS_YT == 'true'
         run: |
           git config user.name  "griot-studio-bot"
           git config user.email "actions@github.com"
