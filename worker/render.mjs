@@ -387,7 +387,8 @@ export async function renderJob(job, cfg, workDir, outFile) {
       while (true) {
         const i = tn++;
         if (i >= scenes.length) return;
-        if (!results[i]) continue; // image failed for this scene, it will be dropped
+        // Narrate every scene, even if its image failed: a fallback image is used
+        // below so the line is never lost and the story stays complete.
         const ap = path.join(workDir, "voice" + i + ".mp3");
         if (await fetchTTS(scenes[i], job.voice, ap, cfg)) {
           const d = await probeDuration(ap, cfg);
@@ -402,15 +403,21 @@ export async function renderJob(job, cfg, workDir, outFile) {
   const haveAudio = cfg.ttsEnabled;
 
   // Build one self-contained clip per scene (image + its own narration), then join.
-  cfg.log("  rendering " + imgs.length + " scenes at " + (cfg.width || 1920) + "x" + (cfg.height || 1080));
+  // If a scene's image failed, fall back to the most recent good image (or the first
+  // one) so the scene still plays with its narration and the story is never cut short.
+  cfg.log("  rendering " + scenes.length + " scenes at " + (cfg.width || 1920) + "x" + (cfg.height || 1080));
+  const firstGood = results.find(Boolean) || null;
+  let lastGood = firstGood;
   const clips = [];
   let total = 0;
   for (let i = 0; i < scenes.length; i++) {
-    if (!results[i]) continue;
+    if (results[i]) lastGood = results[i];
+    const img = results[i] || lastGood;
+    if (!img) continue; // no usable image exists yet (only if the very first images failed)
     const c = path.join(workDir, "clip" + i + ".mp4");
     try {
-      if (haveAudio) await sceneClipWithAudio(results[i], audios[i], c, durs[i], cfg, i);
-      else await kenBurnsClip(results[i], c, durs[i], cfg, i);
+      if (haveAudio) await sceneClipWithAudio(img, audios[i], c, durs[i], cfg, i);
+      else await kenBurnsClip(img, c, durs[i], cfg, i);
       const st = await fs.stat(c);
       if (st.size > 1000) { clips.push(c); total += durs[i]; }
     } catch (e) {
