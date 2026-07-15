@@ -17,6 +17,21 @@ YouTube channel, automatically. This is the workflow in
 It also runs on a **daily schedule** (06:00 UTC) and can be started by hand from the repo's
 **Actions** tab.
 
+## Just want to GENERATE videos (not publish yet)?
+
+If your YouTube channel isn't connected yet, you can still make videos on GitHub and download
+them:
+
+1. Put your tales in [`content/`](content/) and push.
+2. Repo → **Actions** tab → **"Generate folktale videos (download only)"** → **Run workflow**.
+3. When it finishes, open the run and download the **`folktale-videos`** artifact — a zip of the
+   finished MP4s, thumbnails, and SEO text.
+
+This uses the free Nigerian voice and the 3D folktale look, uploads nothing to YouTube, and
+leaves your scripts in place so you can tweak and regenerate. When you're ready to auto-publish,
+connect YouTube (below) and use the normal push flow — which also attaches the same downloadable
+artifact to every run.
+
 ## One-time setup
 
 ### 1. Put this project on GitHub

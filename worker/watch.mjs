@@ -77,6 +77,9 @@ cfg.characters = process.env.CF_CHARACTERS === "0" ? false : true;
 cfg.sceneVisuals = process.env.CF_SCENE_VISUALS === "0" ? false : true;
 // auto thumbnail: on by default, disable with CF_THUMBNAILS=0
 cfg.thumbnails = process.env.CF_THUMBNAILS === "0" ? false : true;
+// archive published scripts to the published/ folder. Set CF_ARCHIVE=0 for a pure
+// "generate only" run that re-renders every time (used by the generate workflow).
+cfg.archive = process.env.CF_ARCHIVE === "0" ? false : true;
 cfg.font = process.env.CF_FONT || "";
 
 const stamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -174,7 +177,11 @@ async function processCSV(file, processed) {
 
   // Archive only fully successful scripts. If a render or upload failed, keep the
   // script in the content folder so it is retried on the next run, never lost.
-  if (fileOk) {
+  // In generate-only mode (CF_ARCHIVE=0) nothing is archived, so scripts re-render
+  // every run and you can tweak and regenerate freely.
+  if (!cfg.archive) {
+    log("  generate-only mode: " + file.name + " left in place (not archived)");
+  } else if (fileOk) {
     try {
       const pub = path.join(cfg.input, "published");
       await fs.mkdir(pub, { recursive: true });

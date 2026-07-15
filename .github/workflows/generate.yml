@@ -1,0 +1,66 @@
+name: Generate folktale videos (download only)
+
+# Use this to MAKE videos on GitHub without publishing to YouTube.
+#   Actions tab → "Generate folktale videos (download only)" → Run workflow.
+# It renders every script in content/ into a narrated, illustrated MP4 (free
+# Nigerian voice + 3D folktale look) and attaches the videos as a downloadable
+# artifact. Nothing is uploaded to YouTube and no scripts are archived, so you
+# can tweak a script and generate again.
+#
+# Optional secrets (both improve quality but are not required):
+#   ANTHROPIC_API_KEY   SEO text + character consistency
+#   CF_IMAGE_TOKEN      higher image limits
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      CF_INPUT: ${{ github.workspace }}/content
+      CF_OUTPUT: ${{ github.workspace }}/_render
+      CF_STYLE: folktale3d
+      CF_SCENE_WORDS: "18"
+      # Free Nigerian narration
+      CF_TTS_PROVIDER: edge
+      CF_EDGE_VOICE: en-NG-EzinneNeural
+      CF_EDGE_RATE: "-6%"
+      CF_EDGE_PITCH: "-2Hz"
+      # Generate only: do not upload, do not archive
+      CF_YT_UPLOAD: "0"
+      CF_ARCHIVE: "0"
+      CF_THUMBNAILS: "1"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CF_SEO_MODEL: claude-haiku-4-5-20251001
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install edge-tts (free Nigerian narration)
+        run: python3 -m pip install --upgrade edge-tts
+
+      - name: Render folktales
+        working-directory: worker
+        run: node watch.mjs --once
+
+      - name: Upload finished videos
+        uses: actions/upload-artifact@v4
+        with:
+          name: folktale-videos
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            _render/*.mp4
+            _render/*-thumbnail.jpg
+            _render/*.txt

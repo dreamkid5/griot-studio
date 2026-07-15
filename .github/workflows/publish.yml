@@ -79,6 +79,17 @@ jobs:
         working-directory: worker
         run: node watch.mjs --once
 
+      - name: Save rendered videos as a downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: folktale-videos
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            _render/*.mp4
+            _render/*-thumbnail.jpg
+            _render/*.txt
+
       - name: Commit published tales and ledger
         run: |
           git config user.name  "griot-studio-bot"
