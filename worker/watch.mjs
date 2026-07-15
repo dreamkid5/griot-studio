@@ -21,7 +21,7 @@ const cfg = {
   input: process.env.CF_INPUT || "./input",
   output: process.env.CF_OUTPUT || "./output",
   style: process.env.CF_STYLE || "folktale3d",
-  sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 3.5),
+  sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 4.2),
   // Ken Burns zoom strength. Subtle by default so shots feel natural, not pushed in.
   zoom: Number(process.env.CF_ZOOM || 0.06),
   // Output resolution and quality. 1080p with a low CRF for crisp video.
