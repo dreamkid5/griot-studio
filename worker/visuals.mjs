@@ -47,6 +47,7 @@ export async function buildSceneVisuals(scenes, bible, cfg) {
       charBlock +
       "Below are numbered narration segments. For EACH number, write ONE concrete visual image prompt describing what an illustrator should draw for that exact moment: a clear main subject, the setting, the action, and the mood, all matching the meaning of the narration. Rules:\n" +
       "- Translate the meaning into a picture. Do NOT just repeat the narration words.\n" +
+      "- Framing: favor balanced, natural compositions. Use mostly WIDE and MEDIUM shots that show the character within their surroundings, with room around them. Reserve close-ups for rare emotional beats. Never describe an extreme close-up or a tightly cropped face.\n" +
       "- When a main character appears, describe them using their fixed look above.\n" +
       "- For abstract, rhetorical, or transitional lines, pick a fitting symbolic or atmospheric image from the story's own world (a place, an object, a moment) rather than something literal.\n" +
       "- Never put on-screen text, captions, letters, or numbers in the image.\n" +

@@ -158,13 +158,16 @@ async function fetchMusic(url, outPath) {
 }
 
 // ---------- ffmpeg steps ----------
-// A single still becomes a gently zooming clip (Ken Burns).
+// A single still becomes a gently drifting clip (Ken Burns).
 // Uses a scale based zoom rather than the zoompan filter, which is dozens of
 // times faster, so videos with many scenes render in minutes, not hours.
-// The zoom direction alternates per scene for variety.
+// The zoom is kept subtle (default 6%) and alternates direction per scene so the
+// motion feels natural and cinematic rather than pushed in too far. Tune with CF_ZOOM.
 function kenBurnsClip(imgPath, outPath, dur, cfg, idx = 0) {
   const D = Math.max(0.1, dur);
-  const z = (idx % 2 === 0) ? "(1+0.12*t/" + D + ")" : "(1.12-0.12*t/" + D + ")";
+  const zoom = Math.min(0.2, Math.max(0, Number(cfg.zoom) || 0.06));
+  const hi = (1 + zoom).toFixed(3);
+  const z = (idx % 2 === 0) ? "(1+" + zoom + "*t/" + D + ")" : "(" + hi + "-" + zoom + "*t/" + D + ")";
   const vf =
     "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720," +
     "scale=w='1280*" + z + "':h='720*" + z + "':eval=frame,crop=1280:720,format=yuv420p";
