@@ -98,14 +98,25 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
             </div>
           </div>
           <div class="field" id="voicePanel" style="margin-bottom:0;">
-            <label>Free voice, runs on your device</label>
+            <label>Free voice (Nigerian narration, no key)</label>
             <select class="select" id="voiceSel">
-              <option value="bm_george">George, UK documentary</option>
-              <option value="af_heart">Aria, warm US female</option>
-              <option value="am_michael">Michael, calm US male</option>
-              <option value="bf_emma">Emma, UK female</option>
-              <option value="af_bella">Bella, US female</option>
-              <option value="am_adam">Adam, US male</option>
+              <optgroup label="Nigerian storyteller — free, pro quality">
+                <option value="edge:en-NG-EzinneNeural" selected>Ezinne, Nigerian female storyteller</option>
+                <option value="edge:en-NG-AbeoNeural">Abeo, Nigerian male elder</option>
+              </optgroup>
+              <optgroup label="More African voices — free">
+                <option value="edge:en-KE-AsiliaNeural">Asilia, Kenyan female</option>
+                <option value="edge:en-ZA-LeahNeural">Leah, South African female</option>
+                <option value="edge:en-ZA-LukeNeural">Luke, South African male</option>
+              </optgroup>
+              <optgroup label="On-device voices (US/UK)">
+                <option value="bm_george">George, UK documentary</option>
+                <option value="af_heart">Aria, warm US female</option>
+                <option value="am_michael">Michael, calm US male</option>
+                <option value="bf_emma">Emma, UK female</option>
+                <option value="af_bella">Bella, US female</option>
+                <option value="am_adam">Adam, US male</option>
+              </optgroup>
             </select>
           </div>
           <div class="field" id="premiumPanel" style="display:none;margin-bottom:0;">
@@ -327,8 +338,23 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
     }
 
     async function genVoice(text, onProg) {
-      const mod = await import("/natural-voice.js");
       const voice = document.getElementById("voiceSel").value;
+      // Nigerian / African neural voices: free, via the edge-tts serverless endpoint.
+      if (voice.indexOf("edge:") === 0) {
+        const name = voice.slice(5);
+        if (onProg) onProg(50);
+        const r = await fetch("/edge-tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text, voice: name, rate: "-6%", pitch: "-2Hz" })
+        });
+        const ct = r.headers.get("content-type") || "";
+        if (!r.ok || ct.indexOf("audio") < 0) throw new Error("Nigerian voice unavailable, retrying");
+        if (onProg) onProg(100);
+        return await r.blob();
+      }
+      // On-device browser voices (Kokoro).
+      const mod = await import("/natural-voice.js");
       return await mod.synthesize(text, voice, onProg);
     }
     // Premium voice through your free key, kept server side. Provider is chosen
