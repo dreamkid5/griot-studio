@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.astro/
+
+# Secrets — NEVER commit these. On GitHub they live in Actions → Secrets.
+.env
+*.env
+worker/.env
+!worker/.env.example
+
+# Local render scratch
+_render/
+output/
+worker/output/
+worker/input/
+input/
+
+# OS junk
+.DS_Store
+**/.DS_Store
+voice-server/voice.log
+
+# Large bundled binaries (optional: keep out of git, installed on CI via apt)
+worker/tools/ffmpeg
+worker/tools/ffprobe
+
+# Local Piper voice models — huge, optional, not needed for the Azure/cloud flow.
+# Re-download via voice-server/setup.sh if you want the offline local voice.
+voice-server/voices/*.onnx

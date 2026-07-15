@@ -1,0 +1,91 @@
+name: Publish folktales to YouTube
+
+# How it works:
+#   1. You write a folktale as a plain .txt file in the content/ folder and push it.
+#   2. This workflow renders it into a narrated, illustrated video (Nigerian voice,
+#      3D folktale look), writes the SEO with Claude, and uploads it to YouTube.
+#   3. The published script is moved to content/published/ and the upload ledger
+#      (content/.cf-uploaded.json) is committed back, so a tale is never made twice.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   AZURE_SPEECH_KEY, AZURE_SPEECH_REGION   Nigerian narration (Microsoft Azure)
+#   ANTHROPIC_API_KEY                       SEO + character consistency (Claude)
+#   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN   YouTube auto-upload
+#   CF_IMAGE_TOKEN                          (optional) Pollinations token, higher limits
+# Optional repo variable:
+#   CF_YT_PRIVACY   public | unlisted | private   (default: private)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "content/**"
+  schedule:
+    # Daily at 06:00 UTC — publishes anything new sitting in content/.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+# Allow the job to commit the published/ move + ledger back to the repo.
+permissions:
+  contents: write
+
+# Never run two publishers at once (avoids double uploads and push races).
+concurrency:
+  group: publish-youtube
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CF_INPUT: ${{ github.workspace }}/content
+      CF_OUTPUT: ${{ github.workspace }}/_render
+      CF_STYLE: folktale3d
+      CF_SCENE_WORDS: "18"
+      # Voice — professional Nigerian English (Microsoft Azure)
+      CF_TTS_PROVIDER: azure
+      CF_AZURE_VOICE: en-NG-EzinneNeural
+      CF_AZURE_RATE: "-6%"
+      CF_AZURE_PITCH: "-2%"
+      AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+      AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+      # Claude — SEO, character bible, scene matching
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CF_SEO_MODEL: claude-haiku-4-5-20251001
+      # Images
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+      # YouTube upload
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      CF_YT_PRIVACY: ${{ vars.CF_YT_PRIVACY || 'private' }}
+      CF_THUMBNAILS: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Render new folktales and upload to YouTube
+        working-directory: worker
+        run: node watch.mjs --once
+
+      - name: Commit published tales and ledger
+        run: |
+          git config user.name  "griot-studio-bot"
+          git config user.email "actions@github.com"
+          git add content/
+          if git diff --cached --quiet; then
+            echo "No new tales were published."
+          else
+            git commit -m "chore: publish folktale(s) [skip ci]"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          fi
