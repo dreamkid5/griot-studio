@@ -48,7 +48,7 @@ jobs:
       CF_STYLE: folktale3d
       # Each scene ~3.5s, synced to its own narration. Long scripts scale to long videos.
       CF_SCENE_SECONDS: "3.5"
-      CF_IMG_CONCURRENCY: "4"
+      CF_IMG_CONCURRENCY: "3"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)
       CF_TTS_PROVIDER: edge
       CF_EDGE_VOICE: en-NG-EzinneNeural

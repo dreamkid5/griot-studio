@@ -33,6 +33,8 @@ const cfg = {
   imageBase: process.env.CF_IMAGE_BASE || "https://image.pollinations.ai/prompt",
   imageModel: process.env.CF_IMAGE_MODEL || "flux",
   imageToken: process.env.CF_IMAGE_TOKEN || "",
+  // Prompt enhancement: nicer first try, but a bit more likely to fail. CF_IMAGE_ENHANCE=0 to disable.
+  imageEnhance: process.env.CF_IMAGE_ENHANCE === "0" ? false : true,
   ttsKey: process.env.TTS_API_KEY || "",
   ttsUrl: process.env.CF_TTS_URL || "https://api.openai.com/v1/audio/speech",
   ttsModel: process.env.CF_TTS_MODEL || "gpt-4o-mini-tts",

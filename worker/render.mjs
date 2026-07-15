@@ -37,12 +37,17 @@ async function fetchImage(prompt, seed, outPath, cfg, opts = {}) {
   const w = Number(opts.width) || Number(cfg.width) || 1920;
   const h = Number(opts.height) || Number(cfg.height) || 1080;
   const attempts = Number(opts.attempts) || 6;
+  // Prompt enhancement improves the first try but adds a step that can fail. So we use
+  // it only on the FIRST attempt (best quality) and drop it on retries (more reliable),
+  // which lifts the success rate without losing quality when things go smoothly.
+  const enhanceOn = opts.enhance !== undefined ? opts.enhance : (cfg.imageEnhance !== false);
   for (let attempt = 0; attempt < attempts; attempt++) {
     // Vary the seed on every attempt so a retry generates a genuinely NEW image for
     // this scene, rather than re-requesting the same one that just failed.
     const s = seed + attempt * 104729;
+    const enhance = (enhanceOn && attempt === 0) ? "&enhance=true" : "";
     const url = cfg.imageBase + "/" + encodeURIComponent(prompt) +
-      "?width=" + w + "&height=" + h + "&nologo=true&enhance=true&model=" + cfg.imageModel + "&seed=" + s + token;
+      "?width=" + w + "&height=" + h + "&nologo=true" + enhance + "&model=" + cfg.imageModel + "&seed=" + s + token;
     try {
       const r = await fetch(url);
       if (r.ok) {
@@ -382,12 +387,15 @@ export async function renderJob(job, cfg, workDir, outFile) {
     const missing = [];
     for (let i = 0; i < scenes.length; i++) if (!results[i]) missing.push(i);
     if (!missing.length) break;
-    const lowRes = round > 3 ? { width: 1280, height: 720 } : {};
-    cfg.log("  regenerating " + missing.length + " image(s) (round " + round + (round > 3 ? ", 720p" : "") + ")");
+    // After the first couple of rounds, drop to 720p, which the service almost never
+    // refuses, so stragglers still get their own freshly generated picture quickly.
+    const lowRes = round > 2 ? { width: 1280, height: 720 } : {};
+    cfg.log("  regenerating " + missing.length + " image(s) (round " + round + (round > 2 ? ", 720p" : "") + ")");
     for (const i of missing) {
       const p = path.join(workDir, "img" + i + ".jpg");
       const seed = 500000 + i * 131 + round * 91193;
-      if (await fetchImage(buildPrompt(prompts[i], style), seed, p, cfg, { ...lowRes, attempts: 4 })) results[i] = p;
+      // retries skip enhance for reliability
+      if (await fetchImage(buildPrompt(prompts[i], style), seed, p, cfg, { ...lowRes, attempts: 4, enhance: false })) results[i] = p;
     }
   }
   const imgs = results.filter(Boolean);
