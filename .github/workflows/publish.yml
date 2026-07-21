@@ -49,6 +49,10 @@ jobs:
       # Each scene ~4.2s, synced to its own narration. Long scripts scale to long videos.
       CF_SCENE_SECONDS: "4.2"
       CF_IMG_CONCURRENCY: "3"
+      # 720p on GitHub so even hour-long scripts finish inside the 6-hour job limit.
+      # (Still full HD and great on YouTube. Local Mac renders can stay 1080p.)
+      CF_WIDTH: "1280"
+      CF_HEIGHT: "720"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)
       CF_TTS_PROVIDER: edge
       CF_EDGE_VOICE: en-NG-EzinneNeural
