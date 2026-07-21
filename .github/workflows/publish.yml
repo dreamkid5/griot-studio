@@ -53,6 +53,8 @@ jobs:
       # (Still full HD and great on YouTube. Local Mac renders can stay 1080p.)
       CF_WIDTH: "1280"
       CF_HEIGHT: "720"
+      # Allow long, full-length tales (up to ~1.5 hours) without cutting off the ending.
+      CF_MAX_SCENES: "1500"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)
       CF_TTS_PROVIDER: edge
       CF_EDGE_VOICE: en-NG-EzinneNeural
