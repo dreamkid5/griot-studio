@@ -49,10 +49,10 @@ jobs:
       # Each scene ~4.2s, synced to its own narration. Long scripts scale to long videos.
       CF_SCENE_SECONDS: "4.2"
       CF_IMG_CONCURRENCY: "3"
-      # 720p on GitHub so even hour-long scripts finish inside the 6-hour job limit.
-      # (Still full HD and great on YouTube. Local Mac renders can stay 1080p.)
-      CF_WIDTH: "1280"
-      CF_HEIGHT: "720"
+      # 1080p output (user preference). Fine for videos up to ~40 min within the 6-hour limit.
+      # For very long videos (50+ min) drop to 1280x720 to stay under the limit.
+      CF_WIDTH: "1920"
+      CF_HEIGHT: "1080"
       # Allow long, full-length tales (up to ~1.5 hours) without cutting off the ending.
       CF_MAX_SCENES: "1500"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)
