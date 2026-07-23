@@ -31,7 +31,7 @@ jobs:
       CF_MAX_SCENES: "1500"
       # Free Nigerian narration
       CF_TTS_PROVIDER: edge
-      CF_EDGE_VOICE: en-US-GuyNeural
+      CF_EDGE_VOICE: en-US-BrianNeural
       CF_EDGE_RATE: "-8%"
       CF_EDGE_PITCH: "-3Hz"
       # Generate only: do not upload, do not archive

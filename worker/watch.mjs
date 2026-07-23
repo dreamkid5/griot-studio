@@ -42,7 +42,7 @@ const cfg = {
   // edge-tts: free Microsoft neural voices, NO key, NO card. Deep male narrator by default.
   // Invoked as: python3 -m edge_tts. Install once with: pip install edge-tts
   edgeCmd: process.env.CF_EDGE_CMD || "python3",
-  edgeVoice: process.env.CF_EDGE_VOICE || "en-US-GuyNeural",
+  edgeVoice: process.env.CF_EDGE_VOICE || "en-US-BrianNeural",
   edgeRate: process.env.CF_EDGE_RATE || "-8%",
   edgePitch: process.env.CF_EDGE_PITCH || "-3Hz",
   // local voice server, free and no card
