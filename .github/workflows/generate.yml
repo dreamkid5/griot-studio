@@ -39,6 +39,7 @@ jobs:
       CF_ARCHIVE: "0"
       CF_THUMBNAILS: "1"
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CF_SEO: "0"
       CF_SEO_MODEL: claude-haiku-4-5-20251001
       CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
 

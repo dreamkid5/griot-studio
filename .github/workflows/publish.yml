@@ -60,8 +60,9 @@ jobs:
       CF_EDGE_VOICE: en-US-BrianNeural
       CF_EDGE_RATE: "-8%"
       CF_EDGE_PITCH: "-3Hz"
-      # Claude — SEO, character bible, scene matching
+      # Claude — character consistency + scene matching (auto-SEO disabled)
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CF_SEO: "0"
       CF_SEO_MODEL: claude-haiku-4-5-20251001
       # Images
       CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}

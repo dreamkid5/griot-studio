@@ -80,7 +80,8 @@ cfg.ytUpload = process.env.CF_YT_UPLOAD === "0" ? false : !!(cfg.ytClientId && c
 // Default narration is the free edge-tts Nigerian voice (no key). A provider key still wins if set.
 cfg.ttsProvider = process.env.CF_TTS_PROVIDER || (cfg.localTtsUrl ? "local" : cfg.azureKey ? "azure" : cfg.googleKey ? "google" : cfg.elevenKey ? "elevenlabs" : cfg.ttsKey ? "openai" : "edge");
 cfg.ttsEnabled = cfg.ttsProvider === "edge" ? true : !!(cfg.localTtsUrl || cfg.azureKey || cfg.googleKey || cfg.elevenKey || cfg.ttsKey);
-cfg.seoEnabled = !!cfg.anthropicKey;
+// auto SEO (Claude writes titles, descriptions, tags): disabled with CF_SEO=0
+cfg.seoEnabled = process.env.CF_SEO === "0" ? false : !!cfg.anthropicKey;
 // character consistency: on by default when a Claude key is set, disable with CF_CHARACTERS=0
 cfg.characters = process.env.CF_CHARACTERS === "0" ? false : true;
 // scene matching: Claude turns narration into visual prompts so images fit. CF_SCENE_VISUALS=0 to disable
