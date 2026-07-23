@@ -45,7 +45,7 @@ jobs:
       HAS_YT: ${{ secrets.YT_REFRESH_TOKEN != '' }}
       CF_INPUT: ${{ github.workspace }}/content
       CF_OUTPUT: ${{ github.workspace }}/_render
-      CF_STYLE: folktale3d
+      CF_STYLE: engraving
       # Each scene ~4.2s, synced to its own narration. Long scripts scale to long videos.
       CF_SCENE_SECONDS: "4.2"
       CF_IMG_CONCURRENCY: "3"
@@ -57,9 +57,9 @@ jobs:
       CF_MAX_SCENES: "1500"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)
       CF_TTS_PROVIDER: edge
-      CF_EDGE_VOICE: en-NG-EzinneNeural
-      CF_EDGE_RATE: "-6%"
-      CF_EDGE_PITCH: "-2Hz"
+      CF_EDGE_VOICE: en-US-GuyNeural
+      CF_EDGE_RATE: "-8%"
+      CF_EDGE_PITCH: "-3Hz"
       # Claude — SEO, character bible, scene matching
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CF_SEO_MODEL: claude-haiku-4-5-20251001

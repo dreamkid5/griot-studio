@@ -20,11 +20,11 @@ export async function buildCharacterBible(script, cfg) {
   if (!clean) return null;
 
   const prompt =
-    "You are the visual director for a narrated African folktale, rendered as a warm 3D animated film in the style of a Pixar or DreamWorks feature. Read the full script and identify the main recurring characters, the people (or talking animals) who appear across multiple scenes.\n\n" +
+    "You are the visual director for a narrated video essay on philosophy, power and human psychology, illustrated as vintage 1800s pen-and-ink engravings. Read the full script and identify the main recurring characters, the people (real historical figures, philosophers, or archetypes like 'the manipulator' or 'the ruler') who appear across multiple scenes.\n\n" +
     "For each such character give:\n" +
     "- name: their common name.\n" +
     "- aliases: an array of every proper name, surname, rank, or title used for them in the script (proper nouns only, never pronouns like he or she).\n" +
-    "- description: a fixed, concrete visual description an illustrator can reuse to draw them identically every time, as an expressive 3D animated African character with warm dark skin and soft stylized features. Include approximate age, build, hair, face, and traditional African clothing suited to the setting, plus any distinctive features. About 20 to 30 words. Do not put their name inside the description.\n\n" +
+    "- description: a fixed, concrete visual description an illustrator can reuse to draw them identically every time, as a figure in a vintage engraving. Include approximate age, build, hair, face, and period-appropriate clothing (classical, Renaissance, or historical) suited to the subject, plus any distinctive features. About 20 to 30 words. Do not put their name inside the description.\n\n" +
     "Include at most the 4 most important recurring characters. If there are no real recurring human characters, return an empty list.\n\n" +
     "Return ONLY JSON in exactly this shape:\n" +
     '{"characters":[{"name":"...","aliases":["..."],"description":"..."}]}\n\n' +

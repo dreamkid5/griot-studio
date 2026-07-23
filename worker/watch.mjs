@@ -20,7 +20,7 @@ try { process.loadEnvFile(); } catch (e) { /* no .env, that is fine */ }
 const cfg = {
   input: process.env.CF_INPUT || "./input",
   output: process.env.CF_OUTPUT || "./output",
-  style: process.env.CF_STYLE || "folktale3d",
+  style: process.env.CF_STYLE || "engraving",
   sceneSeconds: Number(process.env.CF_SCENE_SECONDS || 4.2),
   // Ken Burns zoom strength. Subtle by default so shots feel natural, not pushed in.
   zoom: Number(process.env.CF_ZOOM || 0.06),
@@ -39,12 +39,12 @@ const cfg = {
   ttsUrl: process.env.CF_TTS_URL || "https://api.openai.com/v1/audio/speech",
   ttsModel: process.env.CF_TTS_MODEL || "gpt-4o-mini-tts",
   ttsVoice: process.env.CF_TTS_VOICE || "nova",
-  // edge-tts: free Microsoft neural voices, NO key, NO card. Nigerian by default.
+  // edge-tts: free Microsoft neural voices, NO key, NO card. Deep male narrator by default.
   // Invoked as: python3 -m edge_tts. Install once with: pip install edge-tts
   edgeCmd: process.env.CF_EDGE_CMD || "python3",
-  edgeVoice: process.env.CF_EDGE_VOICE || "en-NG-EzinneNeural",
-  edgeRate: process.env.CF_EDGE_RATE || "-6%",
-  edgePitch: process.env.CF_EDGE_PITCH || "-2Hz",
+  edgeVoice: process.env.CF_EDGE_VOICE || "en-US-GuyNeural",
+  edgeRate: process.env.CF_EDGE_RATE || "-8%",
+  edgePitch: process.env.CF_EDGE_PITCH || "-3Hz",
   // local voice server, free and no card
   localTtsUrl: process.env.LOCAL_TTS_URL || "",
   // premium voice providers, choose by which key is set

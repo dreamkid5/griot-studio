@@ -20,7 +20,7 @@ jobs:
     env:
       CF_INPUT: ${{ github.workspace }}/content
       CF_OUTPUT: ${{ github.workspace }}/_render
-      CF_STYLE: folktale3d
+      CF_STYLE: engraving
       # Each scene ~4.2s, synced to its own narration. Long scripts scale to long videos.
       CF_SCENE_SECONDS: "4.2"
       CF_IMG_CONCURRENCY: "3"
@@ -31,9 +31,9 @@ jobs:
       CF_MAX_SCENES: "1500"
       # Free Nigerian narration
       CF_TTS_PROVIDER: edge
-      CF_EDGE_VOICE: en-NG-EzinneNeural
-      CF_EDGE_RATE: "-6%"
-      CF_EDGE_PITCH: "-2Hz"
+      CF_EDGE_VOICE: en-US-GuyNeural
+      CF_EDGE_RATE: "-8%"
+      CF_EDGE_PITCH: "-3Hz"
       # Generate only: do not upload, do not archive
       CF_YT_UPLOAD: "0"
       CF_ARCHIVE: "0"

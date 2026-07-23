@@ -43,14 +43,15 @@ export async function buildSceneVisuals(scenes, bible, cfg) {
     const batch = scenes.slice(start, start + BATCH);
     const numbered = batch.map((s, k) => (start + k + 1) + ". " + s).join("\n");
     const prompt =
-      "You are the visual director for a narrated African folktale rendered as a warm 3D animated film in the style of a Pixar or DreamWorks feature, set in a timeless rural African village in bright, warm daylight.\n\n" +
+      "You are the visual director for a narrated video essay on philosophy, power, strategy and human psychology, in the spirit of Machiavelli and the Stoic thinkers. Every scene is illustrated as a vintage 1800s pen-and-ink engraving with dramatic, cinematic, moody lighting and Renaissance or classical antiquity settings.\n\n" +
       charBlock +
       "Below are numbered narration segments. For EACH number, write ONE concrete visual image prompt describing what an illustrator should draw for that exact moment: a clear main subject, the setting, the action, and the mood, all matching the meaning of the narration. Rules:\n" +
       "- Translate the meaning into a picture. Do NOT just repeat the narration words.\n" +
-      "- Framing: favor balanced, natural compositions. Use mostly WIDE and MEDIUM shots that show the character within their surroundings, with room around them. Reserve close-ups for rare emotional beats. Never describe an extreme close-up or a tightly cropped face.\n" +
-      "- Lighting: keep every scene BRIGHT and the character clearly and fully lit and easy to see. Prefer daytime and well-lit settings. Do NOT put the character in shadow, silhouette, or heavy backlight. For a night or indoor moment, light the character with warm firelight, lamplight, or bright moonlight so their face and clothing are still clearly visible.\n" +
+      "- Setting & subjects: use historical and classical imagery — philosophers, kings, generals, nobles, scholars, courtiers, soldiers, Roman and Renaissance figures, palaces, courts, studies, battlefields, statues, chessboards, masks, scales, mirrors, candlelit chambers. Favour timeless period scenes over anything modern.\n" +
+      "- Framing: vary the shot for a cinematic feel — sweeping wide establishing scenes, medium two-person compositions of tension or dialogue, and striking close-ups of a face, hand or object for dramatic emphasis.\n" +
+      "- Lighting & mood: dramatic and moody chiaroscuro, deep shadows and pools of warm candle or torch light, serious and atmospheric. Keep the main subject readable within the scene.\n" +
       "- When a main character appears, describe them using their fixed look above.\n" +
-      "- For abstract, rhetorical, or transitional lines, pick a fitting symbolic or atmospheric image from the story's own world (a place, an object, a moment) rather than something literal.\n" +
+      "- For abstract, rhetorical, or transitional lines, choose a fitting symbolic or allegorical image (a chess move, a puppet's strings, a crumbling statue, a serpent, a masked figure, a lone throne) rather than something literal.\n" +
       "- Never put on-screen text, captions, letters, or numbers in the image.\n" +
       "- Keep each prompt vivid but under about 40 words.\n\n" +
       "Return ONLY JSON covering every number in this batch, in this shape:\n" +

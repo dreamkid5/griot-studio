@@ -59,7 +59,8 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
           <div class="field" style="margin-bottom:12px;">
             <label>Art style</label>
             <select class="select" id="styleSel">
-              <option value="folktale3d" selected>African folktale (3D animated)</option>
+              <option value="engraving" selected>Vintage engraving (philosophy)</option>
+              <option value="folktale3d">African folktale (3D animated)</option>
               <option value="watercolor">Watercolor illustration</option>
               <option value="cinematic">Cinematic photo</option>
               <option value="storybook">Storybook painting</option>
@@ -98,24 +99,22 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
             </div>
           </div>
           <div class="field" id="voicePanel" style="margin-bottom:0;">
-            <label>Free voice (Nigerian narration, no key)</label>
+            <label>Free narrator voice (deep, no key)</label>
             <select class="select" id="voiceSel">
-              <optgroup label="Nigerian storyteller — free, pro quality">
-                <option value="edge:en-NG-EzinneNeural" selected>Ezinne, Nigerian female storyteller</option>
-                <option value="edge:en-NG-AbeoNeural">Abeo, Nigerian male elder</option>
-              </optgroup>
-              <optgroup label="More African voices — free">
-                <option value="edge:en-KE-AsiliaNeural">Asilia, Kenyan female</option>
-                <option value="edge:en-ZA-LeahNeural">Leah, South African female</option>
-                <option value="edge:en-ZA-LukeNeural">Luke, South African male</option>
+              <optgroup label="Deep male narrators — free, pro quality">
+                <option value="edge:en-US-GuyNeural" selected>Guy, US documentary narrator</option>
+                <option value="edge:en-US-BrianNeural">Brian, deep warm narrator</option>
+                <option value="edge:en-US-RogerNeural">Roger, deep and serious</option>
+                <option value="edge:en-US-SteffanNeural">Steffan, dramatic storyteller</option>
+                <option value="edge:en-US-AndrewMultilingualNeural">Andrew, natural and confident</option>
+                <option value="edge:en-GB-RyanNeural">Ryan, British gravitas</option>
               </optgroup>
               <optgroup label="On-device voices (US/UK)">
                 <option value="bm_george">George, UK documentary</option>
-                <option value="af_heart">Aria, warm US female</option>
                 <option value="am_michael">Michael, calm US male</option>
-                <option value="bf_emma">Emma, UK female</option>
-                <option value="af_bella">Bella, US female</option>
                 <option value="am_adam">Adam, US male</option>
+                <option value="af_heart">Aria, warm US female</option>
+                <option value="bf_emma">Emma, UK female</option>
               </optgroup>
             </select>
           </div>
@@ -245,7 +244,8 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
       lineart: "elegant line art, minimal single weight lines, clean white background",
       synthwave: "synthwave retro futuristic, neon glow, purple and cyan, 1980s aesthetic",
       folktale: "African folktale illustration, rich earth tones, bold tribal patterns, Ndebele and Kente inspired motifs, warm ochre and indigo palette, textured, storytelling art",
-      folktale3d: "3D animated feature film still in the style of a Pixar and DreamWorks African folktale, expressive stylized characters with warm dark skin and soft subsurface shading, bright warm natural daylight with soft even front lighting so the characters are clearly and fully lit and easy to see, no dark silhouettes and no heavy backlighting, vibrant and colourful, rural West African village of thatched-roof huts, acacia trees and gentle green hills under a bright blue sky, richly textured woven robes and carved wood, gentle global illumination, high detail, wholesome and heartwarming, not photorealistic, balanced natural framing, mostly wide and medium establishing shots that show the full figure and the surroundings with generous headroom, the main character well lit and clearly visible, not a tightly cropped close-up"
+      folktale3d: "3D animated feature film still in the style of a Pixar and DreamWorks African folktale, expressive stylized characters with warm dark skin and soft subsurface shading, bright warm natural daylight with soft even front lighting so the characters are clearly and fully lit and easy to see, no dark silhouettes and no heavy backlighting, vibrant and colourful, rural West African village of thatched-roof huts, acacia trees and gentle green hills under a bright blue sky, richly textured woven robes and carved wood, gentle global illumination, high detail, wholesome and heartwarming, not photorealistic, balanced natural framing, mostly wide and medium establishing shots that show the full figure and the surroundings with generous headroom, the main character well lit and clearly visible, not a tightly cropped close-up",
+      engraving: "vintage 1800s engraving and woodcut illustration, intricate pen and ink cross-hatching and etched line work, aged paper texture, muted limited palette of sepia, ochre, rust, olive and slate blue, dramatic chiaroscuro lighting, Renaissance and classical antiquity setting, philosophers, nobles, scholars, kings and historical figures in period dress, serious moody cinematic and allegorical, richly detailed hand drawn illustration, not photorealistic, not a photograph, no text or words in the image"
     };
 
     let scenes = [
