@@ -46,8 +46,11 @@ jobs:
       CF_INPUT: ${{ github.workspace }}/content
       CF_OUTPUT: ${{ github.workspace }}/_render
       CF_STYLE: engraving
-      # Locked at 6s per scene, synced to its own narration.
+      # Videos over 35 min: 6s scenes at 720p. Videos 35 min and under: 4.5s at 1080p.
       CF_SCENE_SECONDS: "6"
+      # Videos at or under this many minutes get 1080p + the shorter scene length.
+      CF_HD_MAX_MINUTES: "35"
+      CF_SHORT_SCENE_SECONDS: "4.5"
       CF_IMG_CONCURRENCY: "3"
       # 1080p output (user preference). Fine for videos up to ~40 min within the 6-hour limit.
       # For very long videos (50+ min) drop to 1280x720 to stay under the limit.
@@ -56,8 +59,6 @@ jobs:
       # Scene budget: long scripts get LONGER scenes (never truncated) so image count
       # stays bounded and a render always finishes well inside the 6-hour CI limit.
       CF_MAX_SCENES: "600"
-      # Above this many scenes a video auto-renders at 720p so it always finishes.
-      CF_HD_MAX_SCENES: "250"
       # Do not START another video after 2h, so even a slow one lands well under the 6h wall.
       CF_TIME_BUDGET_MIN: "120"
       # Voice — FREE Nigerian English via edge-tts (no key, no card)

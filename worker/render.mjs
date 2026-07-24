@@ -336,20 +336,36 @@ export async function renderJob(job, cfg, workDir, outFile) {
   // Cut the script into short scenes of about the target length. The final duration
   // of each scene comes from its own narration below, so the pictures stay locked to
   // the voice; this word estimate only sets roughly how much text each scene covers.
-  const targetSec = Math.max(1.5, Number(cfg.sceneSeconds) || 4.2);
+  const wps = Number(cfg.wps) || 2.4;
+  const totalWords = job.script.trim().split(/\s+/).filter(Boolean).length;
+  const estMinutes = totalWords / wps / 60;
+
+  // Two tiers, decided by how long the finished video will be:
+  //   Short/normal videos  -> snappier scenes at full 1080p (the batch is small
+  //                           enough that a 1080p render always finishes in time).
+  //   Long videos          -> slightly longer scenes and 720p, because the image
+  //                           count grows with length and a huge 1080p batch can
+  //                           outrun a CI time limit on a bad day.
+  const HD_MAX_MIN = Number(process.env.CF_HD_MAX_MINUTES || 35);
+  const isShort = estMinutes <= HD_MAX_MIN;
+  const targetSec = Math.max(1.5, isShort
+    ? Number(process.env.CF_SHORT_SCENE_SECONDS || 4.5)
+    : (Number(cfg.sceneSeconds) || 6));
+  cfg.log("  ~" + estMinutes.toFixed(0) + " min video: " + (isShort
+    ? "1080p, aiming for " + targetSec + "s scenes"
+    : "long video, 720p, aiming for " + targetSec + "s scenes"));
+
   // Scene budget. This is the safety valve that stops very long scripts from needing
   // more images than a render can finish. Rather than CUTTING the story short, a script
   // that would overflow the budget gets LONGER scenes instead, so the whole story is
   // still told, just with each picture held a little longer. Bounded images => bounded
   // render time => a run can never grind past a CI time limit.
-  const MAX_SCENES = Math.max(20, Number(process.env.CF_MAX_SCENES || 320));
-  let targetWords = Math.max(3, Math.round(targetSec * (Number(cfg.wps) || 2.4)));
-  const totalWords = job.script.trim().split(/\s+/).filter(Boolean).length;
+  const MAX_SCENES = Math.max(20, Number(process.env.CF_MAX_SCENES || 600));
+  let targetWords = Math.max(3, Math.round(targetSec * wps));
   if (Math.ceil(totalWords / targetWords) > MAX_SCENES) {
     targetWords = Math.ceil(totalWords / MAX_SCENES);
     cfg.log("  long script (" + totalWords + " words): stretching scenes so the whole story fits in " + MAX_SCENES + " scenes");
   }
-  const wps = Number(cfg.wps) || 2.4;
   let scenes = splitScript(job.script, targetWords);
   // Scenes are built from whole clauses, so they always land a little OVER the word
   // target. Measure the real average and correct once, so "6 seconds" actually gives
@@ -367,15 +383,11 @@ export async function renderJob(job, cfg, workDir, outFile) {
   const avgSec = scenes.length ? (totalWords / wps / scenes.length) : targetSec;
   cfg.log("  " + scenes.length + " scenes, about " + avgSec.toFixed(1) + "s each, synced to the voice");
 
-  // Adaptive resolution. Short scene lengths mean more images, and a very large batch
-  // at 1080p can outrun a CI time limit on a bad day for the image service. So we keep
-  // 1080p whenever the batch is small enough to be safe, and quietly drop long videos
-  // to 720p instead. That way the scene pacing the user chose is always honoured and a
-  // render still always finishes. Tune with CF_HD_MAX_SCENES.
-  const HD_MAX = Number(process.env.CF_HD_MAX_SCENES || 250);
-  if (scenes.length > HD_MAX && (Number(cfg.width) || 1920) > 1280) {
+  // Resolution follows the same tier: full 1080p for short/normal videos, 720p for
+  // long ones, so the image batch always stays small enough to finish in time.
+  if (!isShort && (Number(cfg.width) || 1920) > 1280) {
     cfg = { ...cfg, width: 1280, height: 720 };
-    cfg.log("  long video (" + scenes.length + " scenes): rendering at 720p so it finishes safely");
+    cfg.log("  over " + HD_MAX_MIN + " min: rendering at 720p so it finishes safely");
   }
 
   // Character bible: keep the main characters looking the same across scenes.
