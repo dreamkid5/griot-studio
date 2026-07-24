@@ -336,12 +336,27 @@ export async function renderJob(job, cfg, workDir, outFile) {
   // Cut the script into short scenes of about the target length. The final duration
   // of each scene comes from its own narration below, so the pictures stay locked to
   // the voice; this word estimate only sets roughly how much text each scene covers.
-  const targetSec = Math.max(1.5, Number(cfg.sceneSeconds) || 3.5);
-  const MAX_SCENES = Number(process.env.CF_MAX_SCENES || 800);
-  const targetWords = Math.max(3, Math.round(targetSec * (Number(cfg.wps) || 2.4)));
+  const targetSec = Math.max(1.5, Number(cfg.sceneSeconds) || 4.2);
+  // Scene budget. This is the safety valve that stops very long scripts from needing
+  // more images than a render can finish. Rather than CUTTING the story short, a script
+  // that would overflow the budget gets LONGER scenes instead, so the whole story is
+  // still told, just with each picture held a little longer. Bounded images => bounded
+  // render time => a run can never grind past a CI time limit.
+  const MAX_SCENES = Math.max(20, Number(process.env.CF_MAX_SCENES || 320));
+  let targetWords = Math.max(3, Math.round(targetSec * (Number(cfg.wps) || 2.4)));
+  const totalWords = job.script.trim().split(/\s+/).filter(Boolean).length;
+  if (Math.ceil(totalWords / targetWords) > MAX_SCENES) {
+    targetWords = Math.ceil(totalWords / MAX_SCENES);
+    cfg.log("  long script (" + totalWords + " words): stretching scenes so the whole story fits in " + MAX_SCENES + " scenes");
+  }
   let scenes = splitScript(job.script, targetWords);
-  if (scenes.length > MAX_SCENES) scenes = scenes.slice(0, MAX_SCENES);
-  cfg.log("  " + scenes.length + " scenes, aiming for ~" + targetSec + "s each, synced to the voice");
+  // Clause boundaries can overshoot the estimate, so make one correction pass.
+  if (scenes.length > MAX_SCENES) {
+    targetWords = Math.ceil(targetWords * (scenes.length / MAX_SCENES) + 1);
+    scenes = splitScript(job.script, targetWords);
+  }
+  const avgSec = scenes.length ? (totalWords / (Number(cfg.wps) || 2.4) / scenes.length) : targetSec;
+  cfg.log("  " + scenes.length + " scenes, about " + avgSec.toFixed(1) + "s each, synced to the voice");
 
   // Character bible: keep the main characters looking the same across scenes.
   let bible = null;

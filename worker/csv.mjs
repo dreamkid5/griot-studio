@@ -94,8 +94,10 @@ export function splitScript(text, targetWordsOverride) {
     if (words >= TARGET) { parts.push(cur); cur = ""; words = 0; }
   }
   if (cur) parts.push(cur);
-  const MAX = Number(process.env.CF_MAX_SCENES || 800); // safety ceiling only
-  return parts.length ? parts.slice(0, MAX) : [text];
+  // Absolute safety ceiling only. The real scene budget lives in render.mjs, which
+  // stretches scenes to fit rather than cutting the story short, so nothing is
+  // truncated here (a silent cut would drop the end of a long script).
+  return parts.length ? parts.slice(0, 5000) : [text];
 }
 
 export function buildPrompt(scene, style) {

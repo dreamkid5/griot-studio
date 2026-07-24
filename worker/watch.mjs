@@ -96,6 +96,17 @@ cfg.font = process.env.CF_FONT || "";
 const stamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 const log = (m) => console.log("[" + stamp() + "] " + m);
 
+// Time budget. CI runners kill a job at a hard limit (GitHub: 6 hours), which would
+// throw away hours of work and leave the script unpublished, so it retries forever.
+// Instead we stop STARTING new videos once the budget is spent and leave the rest for
+// the next run. CF_TIME_BUDGET_MIN=0 (the default) means no limit, for local runs.
+const RUN_START = Date.now();
+const TIME_BUDGET_MIN = Number(process.env.CF_TIME_BUDGET_MIN || 0);
+const minsElapsed = () => (Date.now() - RUN_START) / 60000;
+function outOfTime() {
+  return TIME_BUDGET_MIN > 0 && minsElapsed() > TIME_BUDGET_MIN;
+}
+
 async function ensureDirs() {
   await fs.mkdir(cfg.input, { recursive: true });
   await fs.mkdir(cfg.output, { recursive: true });
@@ -141,6 +152,12 @@ async function processCSV(file, processed) {
 
   let fileOk = true;
   for (let i = 0; i < jobs.length; i++) {
+    // Never start a video we cannot finish inside the run's time budget.
+    if (i > 0 && outOfTime()) {
+      log("  time budget reached, stopping before the next video in this file");
+      fileOk = false;
+      break;
+    }
     const job = jobs[i];
     const base = slug(job.title) || ("video_" + (i + 1));
     const outFile = path.join(cfg.output, base + ".mp4");
@@ -212,7 +229,13 @@ async function runOnce() {
   const processed = await loadProcessed();
   const news = await listNewCSVs(processed);
   if (!news.length) { log("no new CSV files in " + cfg.input); return; }
-  for (const f of news) await processCSV(f, processed);
+  for (const f of news) {
+    if (outOfTime()) {
+      log("time budget reached after " + minsElapsed().toFixed(0) + " min, leaving the remaining script(s) for the next run");
+      break;
+    }
+    await processCSV(f, processed);
+  }
 }
 
 async function main() {
