@@ -349,14 +349,34 @@ export async function renderJob(job, cfg, workDir, outFile) {
     targetWords = Math.ceil(totalWords / MAX_SCENES);
     cfg.log("  long script (" + totalWords + " words): stretching scenes so the whole story fits in " + MAX_SCENES + " scenes");
   }
+  const wps = Number(cfg.wps) || 2.4;
   let scenes = splitScript(job.script, targetWords);
-  // Clause boundaries can overshoot the estimate, so make one correction pass.
+  // Scenes are built from whole clauses, so they always land a little OVER the word
+  // target. Measure the real average and correct once, so "6 seconds" actually gives
+  // about 6 seconds instead of drifting to 8.
+  const firstAvg = scenes.length ? totalWords / wps / scenes.length : targetSec;
+  if (firstAvg > targetSec * 1.12) {
+    targetWords = Math.max(3, Math.round(targetWords * (targetSec / firstAvg)));
+    scenes = splitScript(job.script, targetWords);
+  }
+  // Then enforce the scene budget (stretch, never truncate).
   if (scenes.length > MAX_SCENES) {
     targetWords = Math.ceil(targetWords * (scenes.length / MAX_SCENES) + 1);
     scenes = splitScript(job.script, targetWords);
   }
-  const avgSec = scenes.length ? (totalWords / (Number(cfg.wps) || 2.4) / scenes.length) : targetSec;
+  const avgSec = scenes.length ? (totalWords / wps / scenes.length) : targetSec;
   cfg.log("  " + scenes.length + " scenes, about " + avgSec.toFixed(1) + "s each, synced to the voice");
+
+  // Adaptive resolution. Short scene lengths mean more images, and a very large batch
+  // at 1080p can outrun a CI time limit on a bad day for the image service. So we keep
+  // 1080p whenever the batch is small enough to be safe, and quietly drop long videos
+  // to 720p instead. That way the scene pacing the user chose is always honoured and a
+  // render still always finishes. Tune with CF_HD_MAX_SCENES.
+  const HD_MAX = Number(process.env.CF_HD_MAX_SCENES || 250);
+  if (scenes.length > HD_MAX && (Number(cfg.width) || 1920) > 1280) {
+    cfg = { ...cfg, width: 1280, height: 720 };
+    cfg.log("  long video (" + scenes.length + " scenes): rendering at 720p so it finishes safely");
+  }
 
   // Character bible: keep the main characters looking the same across scenes.
   let bible = null;
