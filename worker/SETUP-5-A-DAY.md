@@ -21,7 +21,7 @@ Each time you want videos, put them in one file named exactly `input/pending.csv
 cp sample-videos.csv input/pending.csv
 ```
 
-Each row receives a new female presenter. The worker rejects any presenter image
+Each row receives a new white female presenter. The worker rejects any presenter image
 already recorded in its presenter history, and GitHub Actions carries that
 history into later video runs.
 

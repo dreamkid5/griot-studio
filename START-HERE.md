@@ -57,7 +57,7 @@ That's it. Repeat with as many tales as you like.
 These are already set to sensible defaults, so you can ignore them:
 
 - **Voice:** narration is locked to Jenny (`en-US-JennyNeural`).
-- **Presenter:** always a woman, newly generated for each video and checked
+- **Presenter:** always a white woman, newly generated for each video and checked
   against presenter history to prevent reuse.
 - **Look:** 3D animated African folktale (`folktale3d`).
 - **Scene length:** about 6 seconds.

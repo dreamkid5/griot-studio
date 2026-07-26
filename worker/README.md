@@ -58,7 +58,7 @@ Narration is always on and locked to Jenny (`en-US-JennyNeural`) through
 the CSV `voice` column cannot change the narrator.
 
 For storytime videos, the presenter on the left is always a newly generated
-woman. The worker records each presenter seed and image hash in
+white woman. The worker records each presenter seed and image hash in
 `output/.presenter-history.json`; exact duplicates are rejected. The GitHub
 workflows cache this file so presenter photos stay unique across separate runs.
 
