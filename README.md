@@ -69,7 +69,7 @@ Full details: [worker/SETUP-VOICE.md](worker/SETUP-VOICE.md).
 Image generation and video rendering are also keyless. The automated publishing pipeline
 does not switch to another narrator when other speech-provider keys are present.
 
-Every storytime video generates a new female presenter for the left panel. Presenter
+Every storytime video generates a new white female presenter for the left panel. Presenter
 seeds and finished-image hashes are recorded in `.presenter-history.json`; an image
 already in that history is rejected and regenerated. GitHub Actions restores this
 history between runs so a previous presenter photo is not reused.

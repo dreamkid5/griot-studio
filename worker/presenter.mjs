@@ -6,14 +6,14 @@ const HISTORY_FILE = ".presenter-history.json";
 const historyStores = new Map();
 
 const HAIR = [
-  "a short natural afro",
-  "shoulder-length box braids",
-  "a neat braided bun",
-  "a natural curly bob",
-  "medium-length locs",
-  "shoulder-length Senegalese twists",
-  "elegant cornrows gathered at the back",
-  "soft natural coils"
+  "a short blonde bob",
+  "shoulder-length brunette waves",
+  "auburn hair in a neat low bun",
+  "a natural curly red bob",
+  "straight dark-brown shoulder-length hair",
+  "long wavy blonde hair",
+  "a chestnut-brown pixie cut",
+  "soft light-brown curls"
 ];
 const CLOTHING = [
   "a rust orange modern blouse",
@@ -22,7 +22,7 @@ const CLOTHING = [
   "a burgundy modern top",
   "a forest green casual blouse",
   "a royal blue modern top",
-  "a cream blouse with subtle African-print trim",
+  "a cream blouse with subtle embroidered trim",
   "a coral casual top"
 ];
 const BACKGROUNDS = [
@@ -58,7 +58,7 @@ export function newFemalePresenterIdentity(job = {}) {
   const seed = (digest.readUInt32BE(0) % 2147483646) + 1;
   const identity = digest.toString("hex").slice(0, 16);
   const who = [
-    "one friendly relatable adult African woman presenter in her late twenties or early thirties",
+    "one friendly relatable adult white European woman presenter in her late twenties or early thirties",
     "with " + pick(FEATURES, digest[4]),
     "and " + pick(HAIR, digest[5]),
     "wearing " + pick(CLOTHING, digest[6])
@@ -69,7 +69,7 @@ export function newFemalePresenterIdentity(job = {}) {
     "soft natural indoor lighting",
     pick(BACKGROUNDS, digest[7]),
     "shallow depth of field, 35mm, highly detailed realistic skin and face",
-    "one woman only, female presenter only, no man, no male person",
+    "one white woman only, white female presenter only, light skin, no man, no male person",
     "not an illustration"
   ].join(", ");
   return { identity, seed, prompt };
