@@ -18,7 +18,7 @@ const PORT = Number(process.env.PORT || 5111);
 // How to invoke Piper. Default uses the Python package: python3 -m piper
 const PIPER_CMD = process.env.PIPER_CMD || "python3";
 const PIPER_PRE = (process.env.PIPER_PRE || "-m piper").split(" ").filter(Boolean);
-const MODEL = process.env.PIPER_MODEL || path.join(HERE, "voices", "en_US-ryan-high.onnx");
+const MODEL = process.env.PIPER_MODEL || path.join(HERE, "voices", "en_US-lessac-high.onnx");
 const OUT_FLAG = process.env.PIPER_OUT_FLAG || "-f";
 
 let counter = 0;

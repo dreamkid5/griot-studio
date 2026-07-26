@@ -7,24 +7,16 @@ const premiumProvider = process.env.CF_TTS_PROVIDER || (process.env.LOCAL_TTS_UR
 const premiumVoices = {
   local: [ { v: "local", l: "Local voice, on your Mac" } ],
   elevenlabs: [
-    { v: "VR6AewLTigWG4xSOukaG", l: "Arnold, documentary US male" },
-    { v: "pNInz6obpgDQGcFmaJgB", l: "Adam, deep US male" },
-    { v: "ErXwobaYiN019PkySvjV", l: "Antoni, warm US male" },
     { v: "21m00Tcm4TlvDq8ikWAM", l: "Rachel, US female" },
-    { v: "EXAVITQu4vr4xnSDxMaL", l: "Bella, US female" },
-    { v: "TxGEqnHWrfWFTfGW9XjX", l: "Josh, US male" }
+    { v: "EXAVITQu4vr4xnSDxMaL", l: "Bella, US female" }
   ],
   google: [
-    { v: "en-US-Neural2-J", l: "US male, documentary" },
-    { v: "en-GB-Neural2-B", l: "UK male" },
     { v: "en-US-Studio-O", l: "US female, studio" },
-    { v: "en-US-Neural2-D", l: "US male, deep" },
     { v: "en-GB-Neural2-A", l: "UK female" },
     { v: "en-US-Neural2-F", l: "US female" }
   ],
   azure: [
     { v: "en-NG-EzinneNeural", l: "Ezinne, Nigerian female storyteller" },
-    { v: "en-NG-AbeoNeural", l: "Abeo, Nigerian male elder" },
     { v: "en-KE-AsiliaNeural", l: "Asilia, Kenyan female" },
     { v: "en-ZA-LeahNeural", l: "Leah, South African female" },
     { v: "en-GB-SoniaNeural", l: "Sonia, UK female" },
@@ -93,30 +85,15 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
           <div class="field" style="margin-bottom:12px;">
             <label>Narration</label>
             <div class="seg" id="narrModeSeg">
-              <button data-mode="generate" class="on">Free</button>
-              <button data-mode="premium">Premium</button>
-              <button data-mode="upload">Upload</button>
-              <button data-mode="none">None</button>
+              <button data-mode="generate" class="on">Jenny</button>
             </div>
           </div>
           <div class="field" id="voicePanel" style="margin-bottom:0;">
-            <label>Free narrator voice (no key)</label>
+            <label>Locked narrator voice</label>
             <select class="select" id="voiceSel">
-              <optgroup label="Storytime voices — free, natural">
-                <option value="edge:en-US-JennyNeural" selected>Jenny, US female (storytime)</option>
-                <option value="edge:en-US-AriaNeural">Aria, US female</option>
-                <option value="edge:en-US-MichelleNeural">Michelle, US female, warm</option>
-                <option value="edge:en-US-AnaNeural">Ana, US female, youthful</option>
-                <option value="edge:en-US-GuyNeural">Guy, US male</option>
-                <option value="edge:en-US-BrianNeural">Brian, deep male narrator</option>
-              </optgroup>
-              <optgroup label="On-device voices (US/UK)">
-                <option value="af_heart">Aria, warm US female</option>
-                <option value="bf_emma">Emma, UK female</option>
-                <option value="am_michael">Michael, calm US male</option>
-                <option value="bm_george">George, UK documentary</option>
-              </optgroup>
+              <option value="edge:en-US-JennyNeural" selected>Jenny — en-US-JennyNeural</option>
             </select>
+            <p class="hint">All automated storytime videos use Jenny.</p>
           </div>
           <div class="field" id="premiumPanel" style="display:none;margin-bottom:0;">
             <label>{premiumLabel}</label>
@@ -259,7 +236,8 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
     let narrationBlob = null;
     const narrationEl = document.getElementById("narrationEl");
     let audioCtx = null, voiceSrc = null, streamDest = null;
-    let narrationMode = "generate", uploadedAudioBlob = null, uploadedAudioUrl = null, uploadedAudioDur = 0, hasAudio = false;
+    const narrationMode = "generate";
+    let uploadedAudioBlob = null, uploadedAudioUrl = null, uploadedAudioDur = 0, hasAudio = false;
     const TITLE_DUR = 3.5;
     let titleDur = 0, narrStarted = false;
     const musicEl = document.getElementById("musicEl");
@@ -339,7 +317,7 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
     }
 
     async function genVoice(text, onProg) {
-      const voice = document.getElementById("voiceSel").value;
+      const voice = "edge:en-US-JennyNeural";
       // Nigerian / African neural voices: free, via the edge-tts serverless endpoint.
       if (voice.indexOf("edge:") === 0) {
         const name = voice.slice(5);
@@ -464,17 +442,6 @@ const premiumLabel = premiumProvider === "local" ? "Narrator, free local voice" 
       window.showToast(parts.length + " scenes created from your script");
     });
 
-    // narration mode: generate a voice, upload your own audio, or none
-    document.getElementById("narrModeSeg").addEventListener("click", (e) => {
-      const b = e.target.closest("button"); if (!b) return;
-      document.querySelectorAll("#narrModeSeg button").forEach((n) => n.classList.remove("on"));
-      b.classList.add("on"); narrationMode = b.getAttribute("data-mode");
-      document.getElementById("voicePanel").style.display = narrationMode === "generate" ? "" : "none";
-      document.getElementById("premiumPanel").style.display = narrationMode === "premium" ? "" : "none";
-      document.getElementById("uploadPanel").style.display = narrationMode === "upload" ? "" : "none";
-      document.getElementById("nonePanel").style.display = narrationMode === "none" ? "block" : "none";
-      built = false; document.getElementById("exportBtn").disabled = true;
-    });
     document.getElementById("uploadAudioBtn").addEventListener("click", () => document.getElementById("audioInput").click());
     document.getElementById("audioInput").addEventListener("change", (e) => {
       const f = e.target.files[0]; if (!f) return;

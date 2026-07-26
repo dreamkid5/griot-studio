@@ -60,19 +60,19 @@ The Thumbnail Studio calls a keyless image model. Requests pass through a same o
 
 ## Voice
 
-Griot Studio narrates in a **professional Nigerian English** neural voice — `en-NG-EzinneNeural` (female storyteller) by default, or `en-NG-AbeoNeural` (male elder), at a warm, measured griot cadence. It runs on **`edge-tts`**, the free neural voices built into Microsoft Edge: **no API key, no account, no card, and no per-video cost.** One-time setup is a single `pip install edge-tts`. Full details: [worker/SETUP-VOICE.md](worker/SETUP-VOICE.md).
+Griot Studio's narrator is locked to **Jenny**, the female neural voice
+**`en-US-JennyNeural`**. It runs on **`edge-tts`**, the free neural voices built into
+Microsoft Edge: **no API key, no account, no card, and no per-video cost.** Voice values
+from the environment or CSV are ignored. One-time setup is a single `pip install edge-tts`.
+Full details: [worker/SETUP-VOICE.md](worker/SETUP-VOICE.md).
 
-Image generation and video rendering are also keyless. Paid options (ElevenLabs, Azure) remain available if you ever want them, but are not needed:
+Image generation and video rendering are also keyless. The automated publishing pipeline
+does not switch to another narrator when other speech-provider keys are present.
 
-* **Free natural voice**: an open neural voice (Kokoro) that runs on your device in the browser. The small model downloads once, then works offline and needs no key. It plays and is baked into the exported video. Six voices, WebGPU when available.
-* **Local voice server, no card**: a free voice that runs on your own Mac through the `voice-server` folder, wrapping the open Piper engine. No key and no card. Run its `setup.sh` once, start it, set `LOCAL_TTS_URL`, and both the Auto Video Premium option and the worker use it. Clear and fast, a step above the browser voice.
-* **Premium voice, your free key**: for documentary quality like a polished upload, the Auto Video page has a Premium option. It supports three providers and picks the one whose key you set, server side, so the key never reaches the browser. Set one of `ELEVENLABS_API_KEY`, `GOOGLE_TTS_KEY`, or `AZURE_SPEECH_KEY` (with `AZURE_SPEECH_REGION`) before `npm run dev`, and the voice list changes to that provider automatically. ElevenLabs gives the top quality, Google and Azure give large free tiers for volume.
-* **Upload your own audio** or **record a voiceover**: keyless, your own voice.
-* **Browser voice**: instant, for checking timing.
-
-### Premium voice and high volume
-
-A free tier key means no payment, up to a monthly character limit. ElevenLabs sounds the best but its free tier is small, good for making individual videos. For high volume, such as several videos a day on a schedule, use a provider with a large free tier: **Google Cloud Text to Speech** gives about a million characters a month free with very good Neural2 voices, and **Microsoft Azure** gives about half a million. The background worker supports all three: set `GOOGLE_TTS_KEY` (best for volume) or `ELEVENLABS_API_KEY`, and it picks the provider automatically.
+Every storytime video generates a new female presenter for the left panel. Presenter
+seeds and finished-image hashes are recorded in `.presenter-history.json`; an image
+already in that history is rejected and regenerated. GitHub Actions restores this
+history between runs so a previous presenter photo is not reused.
 
 ## Watch folder mode
 

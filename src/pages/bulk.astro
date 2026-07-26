@@ -26,7 +26,7 @@ import Icon from "../components/Icon.astro";
 Chamomile Through History | Egyptians honored chamomile as a gift of the sun. Monks grew it in stone gardens. Today it calms millions before sleep."></textarea>
           </div>
           <button class="btn" id="parseBtn" style="width:100%;justify-content:center;"><Icon name="plus" size={15} />Add to queue</button>
-          <p class="hint" style="margin-top:8px;">A CSV can use columns titled title, script, style, voice, and music. Each row becomes one video. Download the template to see the format.</p>
+          <p class="hint" style="margin-top:8px;">A CSV can use columns titled title, script, hook, style, voice, and music. The hook supplies the thumbnail text. Each row becomes one video.</p>
         </div>
       </div>
 
@@ -100,7 +100,7 @@ Chamomile Through History | Egyptians honored chamomile as a gift of the sun. Mo
             <span class="status-dot ok"></span><span id="musicName" style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">music</span>
             <button class="btn sm ghost" id="musicRemove" style="color:var(--rose);">Remove</button>
           </div>
-          <p class="hint" style="margin-top:10px;">Each video gets a free natural voiceover that runs on your device, plus your shared music. No keys needed. The voice column picks the narrator, for example af_heart or bm_george.</p>
+          <p class="hint" style="margin-top:10px;">Each video gets a female natural voiceover that runs on your device, plus your shared music. No keys needed. The voice column accepts female voices such as af_heart or bf_emma.</p>
         </div>
       </div>
 
@@ -175,7 +175,7 @@ Chamomile Through History | Egyptians honored chamomile as a gift of the sun. Mo
     const jobAudioEl = document.getElementById("jobAudioEl");
     const bulkMusicEl = document.getElementById("bulkMusicEl");
     let musicVol = 0.4;
-    const KOKORO_VOICES = ["af_heart", "af_bella", "af_nicole", "af_sarah", "am_michael", "am_adam", "am_echo", "bf_emma", "bf_isabella", "bm_george", "bm_lewis"];
+    const KOKORO_VOICES = ["af_heart", "af_bella", "af_nicole", "af_sarah", "bf_emma", "bf_isabella"];
 
     // ---------- input parsing ----------
     function parseCSV(text) {
@@ -197,10 +197,10 @@ Chamomile Through History | Egyptians honored chamomile as a gift of the sun. Mo
     function jobsFromCSV(text) {
       const rows = parseCSV(text);
       if (!rows.length) return [];
-      let start = 0, ti = 0, si = 1, sti = 2, vi = -1, mi = -1;
+      let start = 0, ti = 0, si = 1, hi = -1, sti = 2, vi = -1, mi = -1;
       const first = rows[0].map((f) => f.trim().toLowerCase());
       if (first.indexOf("script") >= 0) {
-        ti = first.indexOf("title"); si = first.indexOf("script"); sti = first.indexOf("style");
+        ti = first.indexOf("title"); si = first.indexOf("script"); hi = first.indexOf("hook"); sti = first.indexOf("style");
         vi = first.indexOf("voice"); mi = first.indexOf("music");
         if (ti < 0) ti = 0;
         start = 1;
@@ -213,6 +213,7 @@ Chamomile Through History | Egyptians honored chamomile as a gift of the sun. Mo
         out.push({
           title: (r[ti] || ("Video " + (out.length + 1))).trim(),
           script: script,
+          hook: (hi >= 0 && r[hi] ? r[hi].trim() : ""),
           style: (sti >= 0 && r[sti] ? r[sti].trim() : ""),
           voice: (vi >= 0 && r[vi] ? r[vi].trim() : ""),
           music: (mi >= 0 && r[mi] ? r[mi].trim() : "")
@@ -454,12 +455,12 @@ Chamomile Through History | Egyptians honored chamomile as a gift of the sun. Mo
     }
 
     // ---------- wire controls ----------
-    function toJob(j) { return { title: j.title, script: j.script, style: j.style, voice: j.voice || "", music: j.music || "", status: "Queued", progress: 0 }; }
+    function toJob(j) { return { title: j.title, script: j.script, hook: j.hook || "", style: j.style, voice: j.voice || "", music: j.music || "", status: "Queued", progress: 0 }; }
 
     document.getElementById("templateBtn").addEventListener("click", () => {
-      const csv = "title,script,style,voice,music\n" +
-        '"The Story of Valerian","In ancient Rome a weary man could not sleep. Healers gave him valerian root to calm his mind. By dawn he slept deeply.",watercolor,bm_george,\n' +
-        '"Chamomile Through History","Egyptians honored chamomile as a gift of the sun. Monks grew it in stone gardens. Today it calms millions before sleep.",storybook,af_heart,\n';
+      const csv = "title,script,hook,style,voice,music\n" +
+        '"The Story of Valerian","In ancient Rome a weary man could not sleep. Healers gave him valerian root to calm his mind. By dawn he slept deeply.","A weary man could not sleep.",watercolor,bf_emma,\n' +
+        '"Chamomile Through History","Egyptians honored chamomile as a gift of the sun. Monks grew it in stone gardens. Today it calms millions before sleep.","A gift of the sun.",storybook,af_heart,\n';
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
       a.download = "creatorflow_batch_template.csv"; a.click();
