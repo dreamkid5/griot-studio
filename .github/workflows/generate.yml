@@ -35,7 +35,7 @@ jobs:
       CF_MAX_SCENES: "600"
       # Do not START another video after 2h, so even a slow one lands well under the 6h wall.
       CF_TIME_BUDGET_MIN: "120"
-      # Free Nigerian narration
+      # Locked Jenny narration
       CF_TTS_PROVIDER: edge
       CF_EDGE_VOICE: en-US-JennyNeural
       CF_EDGE_RATE: "-5%"
@@ -52,6 +52,14 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Restore presenter uniqueness history
+        uses: actions/cache@v4
+        with:
+          path: _render/.presenter-history.json
+          key: presenter-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            presenter-history-
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -78,3 +86,4 @@ jobs:
             _render/*.mp4
             _render/*-thumbnail.jpg
             _render/*.txt
+            _render/.presenter-history.json

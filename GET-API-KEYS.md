@@ -39,7 +39,8 @@ Goes into `.env` as `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`.
 6. Copy **KEY 1**, and note the **Location/Region**, for example `eastus`.
 7. In `.env`, set `AZURE_SPEECH_KEY=` to KEY 1, and `AZURE_SPEECH_REGION=` to the region.
 
-Voice names to try in the CSV voice column: `en-US-GuyNeural`, `en-GB-RyanNeural`, `en-US-JennyNeural`.
+The automated publishing pipeline is locked to Jenny (`en-US-JennyNeural`) and
+does not use Azure voice overrides.
 
 ---
 
@@ -56,7 +57,8 @@ Goes into `.env` as `GOOGLE_TTS_KEY`.
 7. Recommended: press **Edit** on the key, and under **API restrictions** limit it to **Cloud Text-to-Speech API**, then Save.
 8. In `.env`, set `GOOGLE_TTS_KEY=` and paste the key.
 
-Voice names to try: `en-US-Neural2-J`, `en-GB-Neural2-B`, `en-US-Studio-O`.
+The automated publishing pipeline is locked to Jenny (`en-US-JennyNeural`) and
+does not use Google voice overrides.
 
 ---
 

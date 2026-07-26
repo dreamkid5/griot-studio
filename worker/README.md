@@ -39,44 +39,28 @@ Then drop new CSV files into `input` and they render automatically.
 
 ## The CSV format
 
-Columns: `title, script, style, voice, music`. Only `script` is required.
+Columns: `title, script, hook, style, voice, music`. Only `script` is required. Thumbnail
+text comes from `hook`, or from the opening hook of the script when it is blank.
 
 ```
-title,script,style,voice,music
-"The Story of Valerian","In ancient Rome a weary man could not sleep...",watercolor,nova,
+title,script,hook,style,voice,music
+"The Story of Valerian","In ancient Rome a weary man could not sleep...","A weary man could not sleep.",watercolor,en-US-JennyNeural,
 ```
 
 * **style**: watercolor, cinematic, storybook, anime, 3d, or flat
-* **voice**: alloy, echo, fable, onyx, nova, or shimmer (used when narration is on)
+* **voice**: retained for compatibility but ignored; automation is locked to Jenny (`en-US-JennyNeural`)
 * **music**: a direct URL to an audio file, mixed under the narration
 
 ## Narration
 
-Narration is off by default. Set one provider key to turn it on. The worker picks the provider from whichever key is set.
+Narration is always on and locked to Jenny (`en-US-JennyNeural`) through
+`edge-tts`. It needs no API key. Provider keys, environment voice settings, and
+the CSV `voice` column cannot change the narrator.
 
-For high volume, such as several videos a day, use Azure or Google, which both have large free tiers. The card each asks for at signup is only for identity and is not charged on the free tier.
-
-Azure, about 500 thousand characters a month free:
-
-```
-AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=eastus CF_AZURE_VOICE=en-US-GuyNeural node watch.mjs --once
-```
-
-Google, about a million characters a month free, with Neural2 voices:
-
-```
-GOOGLE_TTS_KEY=your-key CF_GOOGLE_VOICE=en-US-Neural2-J node watch.mjs --once
-```
-
-For top quality on fewer videos, use ElevenLabs:
-
-```
-ELEVENLABS_API_KEY=your-key CF_ELEVEN_VOICE=VR6AewLTigWG4xSOukaG node watch.mjs --once
-```
-
-An OpenAI compatible endpoint also works with `TTS_API_KEY`, tuned by `CF_TTS_URL`, `CF_TTS_MODEL`, and `CF_TTS_VOICE`.
-
-In a CSV, the `voice` column overrides the default per row. For Google use a voice name like `en-GB-Neural2-B`, and for ElevenLabs use a voice id.
+For storytime videos, the presenter on the left is always a newly generated
+woman. The worker records each presenter seed and image hash in
+`output/.presenter-history.json`; exact duplicates are rejected. The GitHub
+workflows cache this file so presenter photos stay unique across separate runs.
 
 ## Settings (all optional)
 
@@ -89,9 +73,8 @@ In a CSV, the `voice` column overrides the default per row. For Google use a voi
 | `CF_IMAGE_BASE` | Pollinations prompt endpoint | Image model base URL |
 | `CF_IMAGE_MODEL` | `flux` | Image model name |
 | `CF_MUSIC` | empty | Path to a shared music file for rows without their own |
-| `TTS_API_KEY` | empty | Turns narration on |
-| `CF_TTS_URL` | OpenAI speech | Text to speech endpoint |
-| `CF_TTS_VOICE` | `nova` | Default voice |
+| `CF_EDGE_RATE` | `-5%` | Jenny's narration rate |
+| `CF_EDGE_PITCH` | `+0Hz` | Jenny's narration pitch |
 | `CF_INTERVAL` | `30` | Seconds between folder checks in watch mode |
 | `CF_FFMPEG` / `CF_FFPROBE` | `ffmpeg` / `ffprobe` | Binary names or paths |
 | `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` | empty | Turn on YouTube upload |

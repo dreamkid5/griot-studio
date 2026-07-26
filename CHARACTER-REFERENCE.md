@@ -37,6 +37,9 @@ description you can paste into any script:
 
 ## Voice
 
-Narration is a professional **Nigerian English** neural voice, free via `edge-tts` —
-`en-NG-EzinneNeural` (female storyteller) by default, or `en-NG-AbeoNeural` (male elder),
-delivered at a warm, measured griot cadence. No key or cost. See `worker/SETUP-VOICE.md`.
+Narration is locked to the female neural voice Jenny (`en-US-JennyNeural`),
+free via `edge-tts`. No key or cost. See `worker/SETUP-VOICE.md`.
+
+The storytime presenter is always a woman. Generate one new presenter identity
+per video, keep her consistent within that video's scenes and thumbnail, and
+never reuse a presenter image recorded in `.presenter-history.json`.

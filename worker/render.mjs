@@ -5,15 +5,23 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { splitScript, buildPrompt, styleKeywords, VOICES } from "./csv.mjs";
+import { splitScript, buildPrompt, styleKeywords } from "./csv.mjs";
 import { buildCharacterBible, sceneCharacterNote } from "./characters.mjs";
 import { buildSceneVisuals } from "./visuals.mjs";
 import { buildThumbnail } from "./thumbnail.mjs";
-import { detectGender } from "./gender.mjs";
+import { generateUniqueFemalePresenter } from "./presenter.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = path.join(HERE, "assets", "fonts");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// This channel has one immutable narrator voice. Keep the compatibility helper
+// so older callers still work, but ignore every provider and voice override.
+export const LOCKED_NARRATOR_VOICE = "en-US-JennyNeural";
+
+export function femaleVoice() {
+  return LOCKED_NARRATOR_VOICE;
+}
 
 // Escape a file path for use inside the ffmpeg subtitles filter argument.
 function ffEscapePath(p) {
@@ -80,11 +88,10 @@ function xmlEscape(s) {
 
 async function fetchTTS(script, voice, outPath, cfg) {
   try {
-    // edge-tts: free Microsoft neural voices, no key and no card. Uses the same
-    // Nigerian voices as Azure (en-NG-EzinneNeural / en-NG-AbeoNeural). Invoked as
-    // `python3 -m edge_tts`. Text is passed via a temp file to avoid arg limits.
+    // edge-tts: free Microsoft neural voices, no key and no card. Female voices only.
+    // Text is passed via a temp file to avoid arg limits.
     if (cfg.ttsProvider === "edge") {
-      const name = (voice && /^[a-z]{2}-[A-Z]{2}-/.test(voice)) ? voice : cfg.edgeVoice;
+      const name = femaleVoice("edge", voice, cfg);
       const txt = outPath + ".txt";
       // tts_words.py writes the mp3 AND a sidecar of per-word timings (outPath.words.json)
       // that the caption engine uses to highlight each word as it is spoken.
@@ -110,7 +117,7 @@ async function fetchTTS(script, voice, outPath, cfg) {
     }
     // Azure Speech: 500k characters a month free, no card needed
     if (cfg.ttsProvider === "azure" && cfg.azureKey) {
-      const name = voice || cfg.azureVoice;
+      const name = femaleVoice("azure", voice, cfg);
       const lang = name.slice(0, 5);
       // Wrap the narration in a warm, measured storytelling cadence (griot pace).
       const rate = cfg.azureRate || "0%";
@@ -132,7 +139,7 @@ async function fetchTTS(script, voice, outPath, cfg) {
     }
     // Google Cloud Text to Speech: large free tier, great for volume
     if (cfg.ttsProvider === "google" && cfg.googleKey) {
-      const name = voice || cfg.googleVoice;
+      const name = femaleVoice("google", voice, cfg);
       const lang = name.slice(0, 5);
       const r = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize?key=" + cfg.googleKey, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -143,7 +150,7 @@ async function fetchTTS(script, voice, outPath, cfg) {
     }
     // ElevenLabs: top quality, smaller free tier
     if (cfg.ttsProvider === "elevenlabs" && cfg.elevenKey) {
-      const voiceId = voice && /^[A-Za-z0-9]{16,}$/.test(voice) ? voice : cfg.elevenVoice;
+      const voiceId = femaleVoice("elevenlabs", voice, cfg);
       const r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + voiceId, {
         method: "POST",
         headers: { "Content-Type": "application/json", "xi-api-key": cfg.elevenKey, "Accept": "audio/mpeg" },
@@ -154,7 +161,7 @@ async function fetchTTS(script, voice, outPath, cfg) {
     }
     // OpenAI compatible
     if (cfg.ttsKey) {
-      const v = VOICES.includes((voice || "").toLowerCase()) ? voice.toLowerCase() : cfg.ttsVoice;
+      const v = femaleVoice("openai", voice, cfg);
       const r = await fetch(cfg.ttsUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.ttsKey },
@@ -472,21 +479,22 @@ export async function renderJob(job, cfg, workDir, outFile) {
     cfg.log("  over " + HD_MAX_MIN + " min: rendering at 720p so it finishes safely");
   }
 
-  // Storytime mode: a fixed presenter portrait on the left of every scene, plus
-  // karaoke captions burned on. Only for the "story" style; other styles render full-frame.
+  // Storytime mode: one fresh female presenter portrait on the left of every
+  // scene in this video. The next video receives a different presenter.
   const storyMode = style === "story" && cfg.presenter !== false;
   let presenter = null;
   if (storyMode) {
-    const gender = job.gender || detectGender(job.script);
-    const who = gender === "male"
-      ? "a friendly relatable young man in his late twenties, short neat dark hair, light stubble, plain casual modern t-shirt"
-      : "a friendly relatable young woman in her late twenties, natural shoulder-length hair, plain casual modern top";
-    const pPrompt = "cinematic photorealistic upper body portrait of " + who +
-      ", warm genuine calm expression, facing the camera, soft natural indoor lighting, softly blurred cosy home background, shallow depth of field, 35mm, highly detailed realistic skin and face, not an illustration";
-    const pPath = path.join(workDir, "presenter.jpg");
-    if (await fetchImage(pPrompt, 24680, pPath, cfg, { width: 768, height: 1024 })) presenter = pPath;
-    if (presenter) { job.presenterFile = presenter; job.gender = gender; }
-    cfg.log("  presenter: " + (presenter ? gender + " (left)" : "could not generate, using full-frame scenes"));
+    const generatedPresenter = await generateUniqueFemalePresenter({
+      job,
+      cfg,
+      workDir,
+      fetchImage
+    });
+    presenter = generatedPresenter && generatedPresenter.file;
+    if (presenter) { job.presenterFile = presenter; job.gender = "female"; }
+    cfg.log("  presenter: " + (presenter
+      ? "new female identity " + generatedPresenter.identity + " (left)"
+      : "could not generate a unique woman, using full-frame scenes"));
   }
 
   // Character bible: keep the main characters looking the same across scenes.

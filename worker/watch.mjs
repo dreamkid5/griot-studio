@@ -10,10 +10,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { jobsFromCSV, slug } from "./csv.mjs";
-import { renderJob } from "./render.mjs";
+import { LOCKED_NARRATOR_VOICE, renderJob } from "./render.mjs";
 import { uploadToYouTube } from "./upload.mjs";
 import { generateSEO } from "./seo.mjs";
-import { detectGender, voiceForGender } from "./gender.mjs";
 
 // Load worker/.env if present, so keys live in one file.
 try { process.loadEnvFile(); } catch (e) { /* no .env, that is fine */ }
@@ -43,29 +42,27 @@ const cfg = {
   ttsUrl: process.env.CF_TTS_URL || "https://api.openai.com/v1/audio/speech",
   ttsModel: process.env.CF_TTS_MODEL || "gpt-4o-mini-tts",
   ttsVoice: process.env.CF_TTS_VOICE || "nova",
-  // edge-tts: free Microsoft neural voices, NO key, NO card. Deep male narrator by default.
+  // edge-tts: free Microsoft neural voices, NO key, NO card. Female-only narration.
   // Invoked as: python3 -m edge_tts. Install once with: pip install edge-tts
   edgeCmd: process.env.CF_EDGE_CMD || "python3",
-  edgeVoice: process.env.CF_EDGE_VOICE || "en-US-JennyNeural",
+  edgeVoice: LOCKED_NARRATOR_VOICE,
   edgeRate: process.env.CF_EDGE_RATE || "-5%",
   edgePitch: process.env.CF_EDGE_PITCH || "+0Hz",
-  // Auto voice by story gender: female stories -> Jenny, male stories -> Brian.
-  femaleVoice: process.env.CF_FEMALE_VOICE || "en-US-JennyNeural",
-  maleVoice: process.env.CF_MALE_VOICE || "en-US-BrianNeural",
+  femaleVoice: LOCKED_NARRATOR_VOICE,
   // local voice server, free and no card
   localTtsUrl: process.env.LOCAL_TTS_URL || "",
   // premium voice providers, choose by which key is set
   azureKey: process.env.AZURE_SPEECH_KEY || "",
   azureRegion: process.env.AZURE_SPEECH_REGION || "eastus",
-  // Nigerian English neural voice: Ezinne (female storyteller). Abeo is the male elder.
+  // Nigerian English female storyteller.
   azureVoice: process.env.CF_AZURE_VOICE || "en-NG-EzinneNeural",
   // Storytelling cadence: a measured, warm griot pace and a touch of pitch warmth.
   azureRate: process.env.CF_AZURE_RATE || "-6%",
   azurePitch: process.env.CF_AZURE_PITCH || "-2%",
   googleKey: process.env.GOOGLE_TTS_KEY || "",
-  googleVoice: process.env.CF_GOOGLE_VOICE || "en-US-Neural2-J",
+  googleVoice: process.env.CF_GOOGLE_VOICE || "en-US-Studio-O",
   elevenKey: process.env.ELEVENLABS_API_KEY || "",
-  elevenVoice: process.env.CF_ELEVEN_VOICE || "VR6AewLTigWG4xSOukaG",
+  elevenVoice: process.env.CF_ELEVEN_VOICE || "21m00Tcm4TlvDq8ikWAM",
   music: process.env.CF_MUSIC || "",
   ffmpeg: process.env.CF_FFMPEG || "ffmpeg",
   ffprobe: process.env.CF_FFPROBE || "ffprobe",
@@ -84,9 +81,13 @@ const cfg = {
   log: (m) => console.log(m)
 };
 cfg.ytUpload = process.env.CF_YT_UPLOAD === "0" ? false : !!(cfg.ytClientId && cfg.ytClientSecret && cfg.ytRefreshToken);
-// Default narration is the free edge-tts Nigerian voice (no key). A provider key still wins if set.
-cfg.ttsProvider = process.env.CF_TTS_PROVIDER || (cfg.localTtsUrl ? "local" : cfg.azureKey ? "azure" : cfg.googleKey ? "google" : cfg.elevenKey ? "elevenlabs" : cfg.ttsKey ? "openai" : "edge");
-cfg.ttsEnabled = cfg.ttsProvider === "edge" ? true : !!(cfg.localTtsUrl || cfg.azureKey || cfg.googleKey || cfg.elevenKey || cfg.ttsKey);
+// Automated publishing is permanently locked to Microsoft's Jenny voice.
+// Environment variables, CSV fields, and configured premium providers cannot
+// change the narrator.
+cfg.ttsProvider = "edge";
+cfg.edgeVoice = LOCKED_NARRATOR_VOICE;
+cfg.femaleVoice = LOCKED_NARRATOR_VOICE;
+cfg.ttsEnabled = true;
 // auto SEO (Claude writes titles, descriptions, tags): disabled with CF_SEO=0
 cfg.seoEnabled = process.env.CF_SEO === "0" ? false : !!cfg.anthropicKey;
 // character consistency: on by default when a Claude key is set, disable with CF_CHARACTERS=0
@@ -166,12 +167,11 @@ async function processCSV(file, processed) {
       break;
     }
     const job = jobs[i];
-    // Auto-pick the narrator voice and presenter gender from the story itself.
-    if (process.env.CF_AUTO_GENDER !== "0") {
-      job.gender = detectGender(job.script);
-      if (!job.voice) job.voice = voiceForGender(job.gender, cfg);
-      log('  story reads as ' + job.gender + ', narrator ' + job.voice);
-    }
+    // Channel rule: every video uses a female presenter and female narrator.
+    // Ignore CSV voice/gender values so a male voice cannot slip into automation.
+    job.gender = "female";
+    job.voice = cfg.femaleVoice;
+    log("  female presenter, narrator " + job.voice);
     const base = slug(job.title) || ("video_" + (i + 1));
     const outFile = path.join(cfg.output, base + ".mp4");
     const workDir = path.join(cfg.output, ".work", base);
