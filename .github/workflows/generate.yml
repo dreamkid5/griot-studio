@@ -8,7 +8,7 @@ name: Generate folktale videos (download only)
 # can tweak a script and generate again.
 #
 # Optional secrets (both improve quality but are not required):
-#   ANTHROPIC_API_KEY   SEO text + character consistency
+#   ANTHROPIC_API_KEY   required: presenter verification + scene consistency
 #   CF_IMAGE_TOKEN      higher image limits
 
 on:
