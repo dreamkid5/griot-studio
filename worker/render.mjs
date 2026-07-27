@@ -479,9 +479,9 @@ export async function renderJob(job, cfg, workDir, outFile) {
     cfg.log("  over " + HD_MAX_MIN + " min: rendering at 720p so it finishes safely");
   }
 
-  // Storytime mode: one fresh female presenter portrait on the left of every
-  // scene in this video. The next video receives a different presenter.
-  const storyMode = style === "story" && cfg.presenter !== false;
+  // Channel lock: every video is rendered in storytime mode with one fresh female
+  // presenter on the left. Style values and configuration must not bypass this.
+  const storyMode = true;
   let presenter = null;
   if (storyMode) {
     const generatedPresenter = await generateUniqueFemalePresenter({
@@ -490,11 +490,13 @@ export async function renderJob(job, cfg, workDir, outFile) {
       workDir,
       fetchImage
     });
-    presenter = generatedPresenter && generatedPresenter.file;
-    if (presenter) { job.presenterFile = presenter; job.gender = "female"; }
-    cfg.log("  presenter: " + (presenter
-      ? "new female identity " + generatedPresenter.identity + " (left)"
-      : "could not generate a unique woman, using full-frame scenes"));
+    if (!generatedPresenter || !generatedPresenter.file) {
+      throw new Error("female presenter generation failed; refusing to render without a female presenter");
+    }
+    presenter = generatedPresenter.file;
+    job.presenterFile = presenter;
+    job.gender = "female";
+    cfg.log("  presenter: new female identity " + generatedPresenter.identity + " (left)");
   }
 
   // Character bible: keep the main characters looking the same across scenes.
