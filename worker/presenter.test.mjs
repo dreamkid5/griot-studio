@@ -99,6 +99,27 @@ test("the image itself must pass two independent API inspections", async () => {
   }
 });
 
+test("validator outages are treated as infrastructure failures, not bad presenters", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "griot-presenter-test-"));
+  const imagePath = path.join(tempDir, "presenter.jpg");
+  await fs.writeFile(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 401, ok: false });
+
+  try {
+    const result = await validateFemalePresenterImage(imagePath, {
+      anthropicKey: "invalid-test-key",
+      seoModel: "test-model"
+    });
+    assert.equal(result.approved, false);
+    assert.equal(result.infrastructureFailure, true);
+    assert.match(result.reason, /validator HTTP 401/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("the automated worker cannot select gender or a male voice", async () => {
   const watchSource = await fs.readFile(new URL("./watch.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(watchSource, /\bdetectGender\b|\bvoiceForGender\b|\bmaleVoice\b/);
@@ -116,6 +137,7 @@ test("presenter generation requires two visual checks and remembers rejected ima
   const presenterSource = await fs.readFile(new URL("./presenter.mjs", import.meta.url), "utf8");
   assert.match(presenterSource, /const VALIDATION_PASSES = 2/);
   assert.match(presenterSource, /ANTHROPIC_API_KEY is required to verify every female presenter/);
+  assert.match(presenterSource, /presenter verification could not run/);
   assert.match(presenterSource, /rejectedHashes/);
   assert.match(presenterSource, /validateFemalePresenterImage/);
 });

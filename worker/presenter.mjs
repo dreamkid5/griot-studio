@@ -149,7 +149,13 @@ async function assessPresenterImage(bytes, cfg, pass) {
         await new Promise((resolve) => setTimeout(resolve, 4000 * (attempt + 1)));
         continue;
       }
-      if (!response.ok) return { approved: false, reason: "validator HTTP " + response.status };
+      if (!response.ok) {
+        return {
+          approved: false,
+          infrastructureFailure: true,
+          reason: "validator HTTP " + response.status
+        };
+      }
       const body = await response.json();
       const text = Array.isArray(body.content)
         ? body.content.filter((block) => block && block.type === "text").map((block) => block.text || "").join("\n")
@@ -161,11 +167,21 @@ async function assessPresenterImage(bytes, cfg, pass) {
         assessment
       };
     } catch (error) {
-      if (attempt === 2) return { approved: false, reason: "validator unavailable: " + error.message };
+      if (attempt === 2) {
+        return {
+          approved: false,
+          infrastructureFailure: true,
+          reason: "validator unavailable: " + error.message
+        };
+      }
       await new Promise((resolve) => setTimeout(resolve, 2500 * (attempt + 1)));
     }
   }
-  return { approved: false, reason: "validator unavailable" };
+  return {
+    approved: false,
+    infrastructureFailure: true,
+    reason: "validator unavailable after three retries"
+  };
 }
 
 export async function validateFemalePresenterImage(imagePath, cfg) {
@@ -242,6 +258,12 @@ export async function generateUniqueFemalePresenter({ job, cfg, workDir, fetchIm
 
     const validation = await validateFemalePresenterImage(presenterPath, cfg);
     if (!validation.approved) {
+      if (validation.infrastructureFailure) {
+        throw new Error(
+          "presenter verification could not run: " + validation.reason +
+          ". The script will remain in content/ and can be retried."
+        );
+      }
       store.rejections.push({
         hash: imageHash,
         seed: profile.seed,

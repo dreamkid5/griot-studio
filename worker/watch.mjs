@@ -110,6 +110,7 @@ const log = (m) => console.log("[" + stamp() + "] " + m);
 // the next run. CF_TIME_BUDGET_MIN=0 (the default) means no limit, for local runs.
 const RUN_START = Date.now();
 const TIME_BUDGET_MIN = Number(process.env.CF_TIME_BUDGET_MIN || 0);
+const REQUIRE_INPUT = process.env.CF_REQUIRE_INPUT === "1";
 const minsElapsed = () => (Date.now() - RUN_START) / 60000;
 function outOfTime() {
   return TIME_BUDGET_MIN > 0 && minsElapsed() > TIME_BUDGET_MIN;
@@ -155,7 +156,9 @@ function jobFromText(name, text) {
 async function processCSV(file, processed) {
   const text = await fs.readFile(path.join(cfg.input, file.name), "utf8");
   const jobs = /\.txt$/i.test(file.name) ? jobFromText(file.name, text) : jobsFromCSV(text);
-  if (!jobs.length) { log("no rows in " + file.name + ", skipping"); processed.add(file.key); await saveProcessed(processed); return; }
+  if (!jobs.length) {
+    throw new Error(file.name + " is empty or contains no usable video rows");
+  }
   log("processing " + file.name + " with " + jobs.length + " video(s)");
 
   let fileOk = true;
@@ -228,26 +231,47 @@ async function processCSV(file, processed) {
       await fs.mkdir(pub, { recursive: true });
       await fs.rename(path.join(cfg.input, file.name), path.join(pub, file.name));
       log("  archived " + file.name);
-    } catch (e) { log("  archive move failed: " + e.message); }
+    } catch (e) {
+      log("  archive move failed: " + e.message);
+      fileOk = false;
+    }
   } else {
     log("  kept " + file.name + " to retry next run (a step failed)");
   }
-  processed.add(file.key);
+  if (fileOk) processed.add(file.key);
   await saveProcessed(processed);
   log("finished " + file.name);
+  return fileOk;
 }
 
 async function runOnce() {
   await ensureDirs();
   const processed = await loadProcessed();
   const news = await listNewCSVs(processed);
-  if (!news.length) { log("no new CSV files in " + cfg.input); return; }
+  if (!news.length) {
+    const message = "no new .txt or .csv scripts in " + cfg.input;
+    if (REQUIRE_INPUT) throw new Error(message + "; put a script directly in content/, not content/published/");
+    log(message);
+    return;
+  }
+  const failures = [];
   for (const f of news) {
     if (outOfTime()) {
       log("time budget reached after " + minsElapsed().toFixed(0) + " min, leaving the remaining script(s) for the next run");
       break;
     }
-    await processCSV(f, processed);
+    try {
+      const ok = await processCSV(f, processed);
+      if (!ok) failures.push(f.name);
+    } catch (error) {
+      log("failed " + f.name + ": " + error.message);
+      failures.push(f.name);
+    }
+  }
+  if (failures.length) {
+    throw new Error(
+      failures.length + " script(s) failed and were left in content/ for retry: " + failures.join(", ")
+    );
   }
 }
 
@@ -257,7 +281,7 @@ async function main() {
   log("input:  " + path.resolve(cfg.input));
   log("output: " + path.resolve(cfg.output));
   log("narration: " + (cfg.ttsEnabled ? "on, provider " + cfg.ttsProvider : "off (set AZURE_SPEECH_KEY, GOOGLE_TTS_KEY, ELEVENLABS_API_KEY, or TTS_API_KEY)"));
-  log("seo: " + (cfg.seoEnabled ? "on, Claude writes titles, descriptions, and tags" : "off (set ANTHROPIC_API_KEY to enable)"));
+  log("seo: " + (cfg.seoEnabled ? "on, Claude writes titles, descriptions, and tags" : "off"));
   log("characters: " + (cfg.anthropicKey && cfg.characters ? "on, Claude keeps main characters consistent" : "off"));
   log("scene matching: " + (cfg.anthropicKey && cfg.sceneVisuals ? "on, Claude matches each image to the narration" : "off"));
   log("thumbnails: " + (cfg.thumbnails ? "on, a bold thumbnail is made for each video" : "off"));

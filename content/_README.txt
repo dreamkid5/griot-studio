@@ -17,7 +17,8 @@ What happens next (automatically):
   portrait must pass two visual checks confirming exactly one adult woman and no
   man before it can enter the video or thumbnail.
 - Narration-matched photorealistic story scenes appear on the right.
-- Claude writes the SEO title, description, and tags, and keeps characters consistent.
+- Anthropic is used only for two strict visual checks of the presenter. Optional
+  Claude SEO and scene-planning calls are disabled to reduce cost and failures.
 - The finished video is uploaded to your YouTube channel.
 - The script is then moved into the published/ folder so it is never made twice.
 
