@@ -2,6 +2,7 @@
 // optional narration and music into a finished MP4. No browser required.
 
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +10,7 @@ import { splitScript, buildPrompt, styleKeywords } from "./csv.mjs";
 import { buildCharacterBible, sceneCharacterNote } from "./characters.mjs";
 import { buildSceneVisuals } from "./visuals.mjs";
 import { buildThumbnail } from "./thumbnail.mjs";
-import { generateUniqueFemalePresenter } from "./presenter.mjs";
+import { generateUniqueFemalePresenter, validateFemalePresenterImage } from "./presenter.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = path.join(HERE, "assets", "fonts");
@@ -38,7 +39,7 @@ function run(cmd, args) {
   });
 }
 
-function probeDuration(file, cfg) {
+export function probeDuration(file, cfg) {
   return new Promise((res) => {
     const p = spawn(cfg.ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file]);
     let out = "";
@@ -49,15 +50,20 @@ function probeDuration(file, cfg) {
 }
 
 // ---------- asset fetching ----------
-async function fetchImage(prompt, seed, outPath, cfg, opts = {}) {
+export async function fetchImage(prompt, seed, outPath, cfg, opts = {}) {
   const token = cfg.imageToken ? "&token=" + encodeURIComponent(cfg.imageToken) : "";
   const w = Number(opts.width) || Number(cfg.width) || 1920;
   const h = Number(opts.height) || Number(cfg.height) || 1080;
   const attempts = Number(opts.attempts) || 6;
+  const requestTimeoutMs = Math.max(
+    15000,
+    Number(opts.timeoutMs) || Number(process.env.CF_IMAGE_REQUEST_TIMEOUT_MS || 90000)
+  );
   // Prompt enhancement improves the first try but adds a step that can fail. So we use
   // it only on the FIRST attempt (best quality) and drop it on retries (more reliable),
   // which lifts the success rate without losing quality when things go smoothly.
   const enhanceOn = opts.enhance !== undefined ? opts.enhance : (cfg.imageEnhance !== false);
+  let lastFailure = "unknown response";
   for (let attempt = 0; attempt < attempts; attempt++) {
     // Vary the seed on every attempt so a retry generates a genuinely NEW image for
     // this scene, rather than re-requesting the same one that just failed.
@@ -66,19 +72,27 @@ async function fetchImage(prompt, seed, outPath, cfg, opts = {}) {
     const url = cfg.imageBase + "/" + encodeURIComponent(prompt) +
       "?width=" + w + "&height=" + h + "&nologo=true" + enhance + "&model=" + cfg.imageModel + "&seed=" + s + token;
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: AbortSignal.timeout(requestTimeoutMs) });
       if (r.ok) {
         const buf = Buffer.from(await r.arrayBuffer());
         if (buf.length > 1000) { await fs.writeFile(outPath, buf); return true; }
+        lastFailure = "response contained no usable image";
       } else if (r.status === 429 || r.status === 503) {
         // rate limited or busy, wait longer and try again
+        lastFailure = "HTTP " + r.status;
         const ra = parseInt(r.headers.get("retry-after") || "0", 10);
-        await sleep(ra > 0 ? Math.min(60000, ra * 1000) : Math.min(45000, 6000 * (attempt + 1)));
+        const backoff = ra > 0 ? Math.min(60000, ra * 1000) : Math.min(45000, 6000 * (attempt + 1));
+        await sleep(backoff + Math.floor(Math.random() * 1500));
         continue;
+      } else {
+        lastFailure = "HTTP " + r.status;
       }
-    } catch (e) { /* network hiccup, retry */ }
-    await sleep(2500 * (attempt + 1));
+    } catch (e) {
+      lastFailure = e && e.name === "TimeoutError" ? "request timeout" : "network error";
+    }
+    await sleep(2500 * (attempt + 1) + Math.floor(Math.random() * 1000));
   }
+  if (cfg.log) cfg.log("  image request failed after " + attempts + " attempts (" + lastFailure + ")");
   return false;
 }
 
@@ -86,7 +100,7 @@ function xmlEscape(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-async function fetchTTS(script, voice, outPath, cfg) {
+export async function fetchTTS(script, voice, outPath, cfg) {
   try {
     // edge-tts: free Microsoft neural voices, no key and no card. Female voices only.
     // Text is passed via a temp file to avoid arg limits.
@@ -417,66 +431,99 @@ async function muxAudio(video, narration, music, outPath, total, cfg) {
   return outPath;
 }
 
-// ---------- orchestration ----------
-export async function renderJob(job, cfg, workDir, outFile) {
-  await fs.mkdir(workDir, { recursive: true });
+// Build the deterministic scene plan once so GitHub batch jobs and the final
+// renderer agree on the exact scene boundaries, resolution, and ordering.
+export function planStory(job, cfg) {
   const style = styleKeywords[job.style] ? job.style : cfg.style;
-
-  // Cut the script into short scenes of about the target length. The final duration
-  // of each scene comes from its own narration below, so the pictures stay locked to
-  // the voice; this word estimate only sets roughly how much text each scene covers.
   const wps = Number(cfg.wps) || 2.4;
   const totalWords = job.script.trim().split(/\s+/).filter(Boolean).length;
   const estMinutes = totalWords / wps / 60;
-
-  // Two tiers, decided by how long the finished video will be:
-  //   Short/normal videos  -> snappier scenes at full 1080p (the batch is small
-  //                           enough that a 1080p render always finishes in time).
-  //   Long videos          -> slightly longer scenes and 720p, because the image
-  //                           count grows with length and a huge 1080p batch can
-  //                           outrun a CI time limit on a bad day.
   const HD_MAX_MIN = Number(process.env.CF_HD_MAX_MINUTES || 35);
   const isShort = estMinutes <= HD_MAX_MIN;
   const targetSec = Math.max(1.5, isShort
     ? Number(process.env.CF_SHORT_SCENE_SECONDS || 4.5)
     : (Number(cfg.sceneSeconds) || 6));
-  cfg.log("  ~" + estMinutes.toFixed(0) + " min video: " + (isShort
-    ? "1080p, aiming for " + targetSec + "s scenes"
-    : "long video, 720p, aiming for " + targetSec + "s scenes"));
-
-  // Scene budget. This is the safety valve that stops very long scripts from needing
-  // more images than a render can finish. Rather than CUTTING the story short, a script
-  // that would overflow the budget gets LONGER scenes instead, so the whole story is
-  // still told, just with each picture held a little longer. Bounded images => bounded
-  // render time => a run can never grind past a CI time limit.
   const MAX_SCENES = Math.max(20, Number(process.env.CF_MAX_SCENES || 600));
   let targetWords = Math.max(3, Math.round(targetSec * wps));
   if (Math.ceil(totalWords / targetWords) > MAX_SCENES) {
     targetWords = Math.ceil(totalWords / MAX_SCENES);
-    cfg.log("  long script (" + totalWords + " words): stretching scenes so the whole story fits in " + MAX_SCENES + " scenes");
   }
   let scenes = splitScript(job.script, targetWords);
-  // Scenes are built from whole clauses, so they always land a little OVER the word
-  // target. Measure the real average and correct once, so "6 seconds" actually gives
-  // about 6 seconds instead of drifting to 8.
   const firstAvg = scenes.length ? totalWords / wps / scenes.length : targetSec;
   if (firstAvg > targetSec * 1.12) {
     targetWords = Math.max(3, Math.round(targetWords * (targetSec / firstAvg)));
     scenes = splitScript(job.script, targetWords);
   }
-  // Then enforce the scene budget (stretch, never truncate).
   if (scenes.length > MAX_SCENES) {
     targetWords = Math.ceil(targetWords * (scenes.length / MAX_SCENES) + 1);
     scenes = splitScript(job.script, targetWords);
   }
   const avgSec = scenes.length ? (totalWords / wps / scenes.length) : targetSec;
-  cfg.log("  " + scenes.length + " scenes, about " + avgSec.toFixed(1) + "s each, synced to the voice");
+  const width = !isShort && (Number(cfg.width) || 1920) > 1280
+    ? 1280
+    : (Number(cfg.width) || 1920);
+  const height = width === 1280 && !isShort
+    ? 720
+    : (Number(cfg.height) || 1080);
+  return {
+    version: 1,
+    style,
+    wps,
+    totalWords,
+    estMinutes,
+    hdMaxMinutes: HD_MAX_MIN,
+    isShort,
+    targetSec,
+    maxScenes: MAX_SCENES,
+    targetWords,
+    scenes,
+    avgSec,
+    width,
+    height
+  };
+}
 
-  // Resolution follows the same tier: full 1080p for short/normal videos, 720p for
-  // long ones, so the image batch always stays small enough to finish in time.
-  if (!isShort && (Number(cfg.width) || 1920) > 1280) {
-    cfg = { ...cfg, width: 1280, height: 720 };
-    cfg.log("  over " + HD_MAX_MIN + " min: rendering at 720p so it finishes safely");
+// ---------- orchestration ----------
+export async function renderJob(job, cfg, workDir, outFile) {
+  await fs.mkdir(workDir, { recursive: true });
+  const planned = planStory(job, cfg);
+  const style = planned.style;
+  const targetSec = planned.targetSec;
+  let scenes = planned.scenes;
+  cfg.log("  ~" + planned.estMinutes.toFixed(0) + " min video: " + (planned.isShort
+    ? "1080p, aiming for " + targetSec + "s scenes"
+    : "long video, 720p, aiming for " + targetSec + "s scenes"));
+  if (planned.targetWords > Math.max(3, Math.round(targetSec * planned.wps))) {
+    cfg.log(
+      "  long script (" + planned.totalWords + " words): stretching scenes so the whole story fits in " +
+      planned.maxScenes + " scenes"
+    );
+  }
+  cfg.log("  " + scenes.length + " scenes, about " + planned.avgSec.toFixed(1) + "s each, synced to the voice");
+  if (!planned.isShort && (Number(cfg.width) || 1920) > 1280) {
+    cfg = { ...cfg, width: planned.width, height: planned.height };
+    cfg.log("  over " + planned.hdMaxMinutes + " min: rendering at 720p so it finishes safely");
+  }
+  const stagedRoot = process.env.CF_STAGED_ASSET_DIR
+    ? path.resolve(process.env.CF_STAGED_ASSET_DIR)
+    : "";
+  let stagedPlan = null;
+  if (stagedRoot) {
+    stagedPlan = JSON.parse(await fs.readFile(path.join(stagedRoot, "plan.json"), "utf8"));
+    const scriptHash = createHash("sha256").update(job.script).digest("hex");
+    if (stagedPlan.scriptHash !== scriptHash) {
+      throw new Error("staged assets belong to a different script; refusing to assemble");
+    }
+    if (!Array.isArray(stagedPlan.scenes) || stagedPlan.scenes.length !== scenes.length) {
+      throw new Error("staged scene plan does not match the current script");
+    }
+    scenes = stagedPlan.scenes;
+    cfg = {
+      ...cfg,
+      width: Number(stagedPlan.width) || cfg.width,
+      height: Number(stagedPlan.height) || cfg.height
+    };
+    cfg.log("  staged assets: verified plan " + stagedPlan.scriptHash.slice(0, 12));
   }
 
   // Channel lock: every video is rendered in storytime mode with one fresh female
@@ -484,19 +531,34 @@ export async function renderJob(job, cfg, workDir, outFile) {
   const storyMode = true;
   let presenter = null;
   if (storyMode) {
-    const generatedPresenter = await generateUniqueFemalePresenter({
-      job,
-      cfg,
-      workDir,
-      fetchImage
-    });
-    if (!generatedPresenter || !generatedPresenter.file) {
-      throw new Error("female presenter generation failed; refusing to render without a female presenter");
+    if (stagedRoot) {
+      presenter = path.join(stagedRoot, "presenter.jpg");
+      const presenterStat = await fs.stat(presenter).catch(() => null);
+      if (!presenterStat || presenterStat.size < 1000) {
+        throw new Error("staged female presenter is missing; refusing to render");
+      }
+      const validation = await validateFemalePresenterImage(presenter, cfg);
+      if (!validation.approved) {
+        throw new Error("staged female presenter failed final verification: " + validation.reason);
+      }
+      job.presenterFile = presenter;
+      job.gender = "female";
+      cfg.log("  presenter: verified staged female identity " + stagedPlan.presenterIdentity + " (left)");
+    } else {
+      const generatedPresenter = await generateUniqueFemalePresenter({
+        job,
+        cfg,
+        workDir,
+        fetchImage
+      });
+      if (!generatedPresenter || !generatedPresenter.file) {
+        throw new Error("female presenter generation failed; refusing to render without a female presenter");
+      }
+      presenter = generatedPresenter.file;
+      job.presenterFile = presenter;
+      job.gender = "female";
+      cfg.log("  presenter: new female identity " + generatedPresenter.identity + " (left)");
     }
-    presenter = generatedPresenter.file;
-    job.presenterFile = presenter;
-    job.gender = "female";
-    cfg.log("  presenter: new female identity " + generatedPresenter.identity + " (left)");
   }
 
   // Character bible: keep the main characters looking the same across scenes.
@@ -520,44 +582,61 @@ export async function renderJob(job, cfg, workDir, outFile) {
     (visuals && visuals[i]) ? visuals[i] : (s + sceneCharacterNote(s, bible, charState)));
 
   const results = new Array(scenes.length).fill(null);
-  const CONC = Math.max(1, Number(process.env.CF_IMG_CONCURRENCY || 2));
-  let next = 0, done = 0;
-  async function imgWorker() {
-    while (true) {
-      const i = next++;
-      if (i >= scenes.length) return;
-      const p = path.join(workDir, "img" + i + ".jpg");
-      if (await fetchImage(buildPrompt(prompts[i], style), 3000 + i * 7, p, cfg)) results[i] = p;
-      done++;
-      if (done % 20 === 0 || done === scenes.length) cfg.log("  images " + done + "/" + scenes.length);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONC, scenes.length) }, imgWorker));
-
-  // Regeneration pass: any scene whose image failed is generated fresh, with a NEW
-  // seed each time (never a reused neighbour). Runs one at a time to be gentle on the
-  // image service; later rounds fall back to 720p, which it almost never refuses, so
-  // every scene ends up with its OWN generated picture.
-  const repairRounds = Number(process.env.CF_IMG_REPAIR_ROUNDS || 8);
-  for (let round = 1; round <= repairRounds; round++) {
+  if (stagedRoot) {
     const missing = [];
-    for (let i = 0; i < scenes.length; i++) if (!results[i]) missing.push(i);
-    if (!missing.length) break;
-    // After the first couple of rounds, drop to 720p, which the service almost never
-    // refuses, so stragglers still get their own freshly generated picture quickly.
-    const lowRes = round > 2 ? { width: 1280, height: 720 } : {};
-    cfg.log("  regenerating " + missing.length + " image(s) (round " + round + (round > 2 ? ", 720p" : "") + ")");
-    for (const i of missing) {
-      const p = path.join(workDir, "img" + i + ".jpg");
-      const seed = 500000 + i * 131 + round * 91193;
-      // retries skip enhance for reliability
-      if (await fetchImage(buildPrompt(prompts[i], style), seed, p, cfg, { ...lowRes, attempts: 4, enhance: false })) results[i] = p;
+    for (let i = 0; i < scenes.length; i++) {
+      const imageFile = path.join(stagedRoot, "assets", "img" + i + ".jpg");
+      const imageStat = await fs.stat(imageFile).catch(() => null);
+      if (imageStat && imageStat.size > 1000) results[i] = imageFile;
+      else missing.push(i + 1);
     }
+    if (missing.length) {
+      throw new Error(
+        "staged image validation failed; missing scene image(s): " +
+        missing.slice(0, 20).join(", ") + (missing.length > 20 ? " and " + (missing.length - 20) + " more" : "")
+      );
+    }
+    cfg.log("  staged images verified: " + results.length + "/" + scenes.length);
+  } else {
+    const CONC = Math.max(1, Number(process.env.CF_IMG_CONCURRENCY || 2));
+    let next = 0, done = 0;
+    async function imgWorker() {
+      while (true) {
+        const i = next++;
+        if (i >= scenes.length) return;
+        const p = path.join(workDir, "img" + i + ".jpg");
+        if (await fetchImage(buildPrompt(prompts[i], style), 3000 + i * 7, p, cfg)) results[i] = p;
+        done++;
+        if (done % 20 === 0 || done === scenes.length) cfg.log("  images " + done + "/" + scenes.length);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONC, scenes.length) }, imgWorker));
+
+    // Regeneration pass: any scene whose image failed is generated fresh, with a NEW
+    // seed each time (never a reused neighbour). Runs one at a time to be gentle on the
+    // image service; later rounds fall back to 720p, which it almost never refuses, so
+    // every scene ends up with its OWN generated picture.
+    const repairRounds = Number(process.env.CF_IMG_REPAIR_ROUNDS || 8);
+    for (let round = 1; round <= repairRounds; round++) {
+      const missing = [];
+      for (let i = 0; i < scenes.length; i++) if (!results[i]) missing.push(i);
+      if (!missing.length) break;
+      // After the first couple of rounds, drop to 720p, which it almost never
+      // refuses, so stragglers still get their own freshly generated picture quickly.
+      const lowRes = round > 2 ? { width: 1280, height: 720 } : {};
+      cfg.log("  regenerating " + missing.length + " image(s) (round " + round + (round > 2 ? ", 720p" : "") + ")");
+      for (const i of missing) {
+        const p = path.join(workDir, "img" + i + ".jpg");
+        const seed = 500000 + i * 131 + round * 91193;
+        // retries skip enhance for reliability
+        if (await fetchImage(buildPrompt(prompts[i], style), seed, p, cfg, { ...lowRes, attempts: 4, enhance: false })) results[i] = p;
+      }
+    }
+    const imgs = results.filter(Boolean);
+    if (!imgs.length) throw new Error("no images were generated");
+    const stillMissing = results.filter((r) => !r).length;
+    if (stillMissing) cfg.log("  note: " + stillMissing + " scene(s) could not get an image and will be skipped");
   }
-  const imgs = results.filter(Boolean);
-  if (!imgs.length) throw new Error("no images were generated");
-  const stillMissing = results.filter((r) => !r).length;
-  if (stillMissing) cfg.log("  note: " + stillMissing + " scene(s) could not get an image and will be skipped");
 
   let music = null;
   if (job.music) music = await fetchMusic(job.music, path.join(workDir, "music.bin"));
@@ -568,7 +647,33 @@ export async function renderJob(job, cfg, workDir, outFile) {
   // which is what keeps every picture in step with the audio, with no drift.
   const audios = new Array(scenes.length).fill(null);
   const durs = new Array(scenes.length).fill(targetSec);
-  if (cfg.ttsEnabled) {
+  if (stagedRoot) {
+    const missing = [];
+    for (let i = 0; i < scenes.length; i++) {
+      const audioFile = path.join(stagedRoot, "assets", "voice" + i + ".mp3");
+      const wordsFile = audioFile + ".words.json";
+      const audioStat = await fs.stat(audioFile).catch(() => null);
+      const wordsStat = await fs.stat(wordsFile).catch(() => null);
+      if (!audioStat || audioStat.size < 1000 || !wordsStat || wordsStat.size < 2) {
+        missing.push(i + 1);
+        continue;
+      }
+      const duration = await probeDuration(audioFile, cfg);
+      if (!duration) {
+        missing.push(i + 1);
+        continue;
+      }
+      audios[i] = audioFile;
+      durs[i] = Math.max(1.0, duration);
+    }
+    if (missing.length) {
+      throw new Error(
+        "staged Jenny narration validation failed; missing scene audio(s): " +
+        missing.slice(0, 20).join(", ") + (missing.length > 20 ? " and " + (missing.length - 20) + " more" : "")
+      );
+    }
+    cfg.log("  staged Jenny narration verified: " + audios.length + "/" + scenes.length);
+  } else if (cfg.ttsEnabled) {
     const TCONC = Math.max(1, Number(process.env.CF_TTS_CONCURRENCY || 4));
     let tn = 0, td = 0;
     async function ttsWorker() {
@@ -588,7 +693,7 @@ export async function renderJob(job, cfg, workDir, outFile) {
     }
     await Promise.all(Array.from({ length: Math.min(TCONC, scenes.length) }, ttsWorker));
   }
-  const haveAudio = cfg.ttsEnabled;
+  const haveAudio = stagedRoot ? true : cfg.ttsEnabled;
 
   // Build one self-contained clip per scene (its OWN image + its own narration), then
   // join. Each scene uses the image generated for it; the regeneration pass above makes
@@ -642,11 +747,19 @@ export async function renderJob(job, cfg, workDir, outFile) {
 
   // Auto thumbnail: a bold, professional 1280x720 image that matches the video.
   if (cfg.thumbnails) {
+    let thumbnailReady = false;
     try {
       const thumbFile = outFile.replace(/\.(mp4|webm)$/i, "-thumbnail.jpg");
       const t = await buildThumbnail(job, cfg, workDir, thumbFile, { fetchImage, run });
-      if (t) { job.thumbnailFile = thumbFile; cfg.log("  thumbnail: " + path.basename(thumbFile)); }
+      if (t) {
+        job.thumbnailFile = thumbFile;
+        thumbnailReady = true;
+        cfg.log("  thumbnail: " + path.basename(thumbFile));
+      }
     } catch (e) { cfg.log("  thumbnail skipped: " + e.message); }
+    if (!thumbnailReady && process.env.CF_REQUIRE_THUMBNAIL === "1") {
+      throw new Error("required hook thumbnail could not be created; refusing to upload");
+    }
   }
 
   return outFile;

@@ -1,22 +1,8 @@
 name: Publish folktales to YouTube
 
-# How it works:
-#   1. You write a folktale as a plain .txt file in the content/ folder and push it.
-#   2. This workflow renders it with the locked Jenny voice, validates its female
-#      presenter, creates the thumbnail, and uploads it to YouTube.
-#   3. The published script is moved to content/published/ and the upload ledger
-#      (content/.cf-uploaded.json) is committed back, so a tale is never made twice.
-#   4. If a newly added script is accidentally put in content/published/, preflight
-#      safely recovers that new file before rendering instead of silently doing nothing.
-#
-# Narration is FREE via edge-tts (Microsoft Edge neural voices) — no key needed.
-#
-# Required repo secrets (Settings → Secrets and variables → Actions):
-#   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN   YouTube auto-upload
-#   ANTHROPIC_API_KEY                       presenter verification only
-#   CF_IMAGE_TOKEN                          (optional) Pollinations token, higher limits
-# Optional repo variable:
-#   CF_YT_PRIVACY   public | unlisted | private   (default: private)
+# Long stories are split into restartable asset jobs. No single job owns all
+# images, narration, rendering, and upload, so GitHub's six-hour per-job limit
+# can no longer erase an entire video's progress.
 
 on:
   push:
@@ -24,140 +10,410 @@ on:
     paths:
       - "content/**"
   schedule:
-    # Daily at 06:00 UTC — publishes anything new sitting in content/.
     - cron: "0 6 * * *"
   workflow_dispatch: {}
 
-# Allow the job to commit the published/ move + ledger back to the repo.
 permissions:
+  actions: read
   contents: write
 
-# Never run two publishers at once (avoids double uploads and push races).
 concurrency:
   group: publish-youtube
   cancel-in-progress: false
 
 jobs:
-  publish:
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      has_input: ${{ steps.preflight.outputs.has_input }}
+      matrix: ${{ steps.story.outputs.matrix }}
+      script_file: ${{ steps.story.outputs.script_file }}
+      script_slug: ${{ steps.story.outputs.script_slug }}
+      script_hash: ${{ steps.story.outputs.script_hash }}
     env:
-      # True only once a YouTube channel is connected (YT_REFRESH_TOKEN secret set).
-      # Until then this workflow does nothing — use the "Generate" workflow to make
-      # and download videos without publishing.
       HAS_YT: ${{ secrets.YT_REFRESH_TOKEN != '' }}
       CF_INPUT: ${{ github.workspace }}/content
-      CF_OUTPUT: ${{ github.workspace }}/_render
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
       CF_STYLE: story
-      # Videos over 35 min: 6s scenes at 720p. Videos 35 min and under: 4.5s at 1080p.
       CF_SCENE_SECONDS: "6"
-      # Videos at or under this many minutes get 1080p + the shorter scene length.
       CF_HD_MAX_MINUTES: "35"
       CF_SHORT_SCENE_SECONDS: "4.5"
-      CF_IMG_CONCURRENCY: "3"
-      # 1080p output (user preference). Fine for videos up to ~40 min within the 6-hour limit.
-      # For very long videos (50+ min) drop to 1280x720 to stay under the limit.
       CF_WIDTH: "1920"
       CF_HEIGHT: "1080"
-      # Scene budget: long scripts get LONGER scenes (never truncated) so image count
-      # stays bounded and a render always finishes well inside the 6-hour CI limit.
       CF_MAX_SCENES: "600"
-      # Do not START another video after 2h, so even a slow one lands well under the 6h wall.
-      CF_TIME_BUDGET_MIN: "120"
-      # A requested run must never pass green without finding and rendering a script.
-      CF_REQUIRE_INPUT: "1"
-      # Voice — Jenny, locked via edge-tts (no key, no card)
-      CF_TTS_PROVIDER: edge
-      CF_EDGE_VOICE: en-US-JennyNeural
-      CF_EDGE_RATE: "-5%"
-      CF_EDGE_PITCH: "+0Hz"
-      # Claude — restricted to mandatory presenter verification. Disabling the
-      # optional scene/SEO calls keeps API use and API-related failures minimal.
+      CF_IMAGE_BATCH_SIZE: "84"
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+      CF_IMAGE_REQUEST_TIMEOUT_MS: "90000"
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CF_REQUIRE_ANTHROPIC: "1"
-      CF_SEO: "0"
-      CF_CHARACTERS: "0"
-      CF_SCENE_VISUALS: "0"
       CF_SEO_MODEL: claude-haiku-4-5-20251001
-      # Images
-      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
-      # YouTube upload
-      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-      CF_YT_PRIVACY: ${{ vars.CF_YT_PRIVACY || 'private' }}
-      CF_THUMBNAILS: "1"
 
     steps:
-      - name: YouTube not connected — skipping
-        if: env.HAS_YT != 'true'
+      - name: Require connected YouTube credentials
         run: |
-          echo "::notice::No YT_REFRESH_TOKEN secret set, so no channel is connected yet."
-          echo "This auto-publish workflow does nothing until you connect a YouTube channel."
-          echo "To make videos now, run the 'Generate folktale videos (download only)' workflow."
+          if [ "$HAS_YT" != "true" ]; then
+            echo "::error::YT_REFRESH_TOKEN is missing; refusing to generate an upload workflow."
+            exit 1
+          fi
 
-      - name: Check out repository
-        if: env.HAS_YT == 'true'
-        uses: actions/checkout@v6
+      # A scheduled run may have waited behind another video for hours. Always
+      # check out the latest main branch, not the stale commit that scheduled it.
+      - name: Check out latest repository state
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
 
-      - name: Validate inputs and recover a misplaced new script
-        if: env.HAS_YT == 'true'
+      - name: Validate current inputs
         id: preflight
         env:
           CF_REQUIRE_INPUT: ${{ github.event_name == 'schedule' && '0' || '1' }}
         run: node worker/preflight.mjs
 
       - name: Restore presenter uniqueness history
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
-        uses: actions/cache@v5
+        if: steps.preflight.outputs.has_input == 'true'
+        uses: actions/cache@v6
         with:
-          path: _render/.presenter-history.json
+          path: _stage/.presenter-history.json
           key: presenter-history-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             presenter-history-
 
-      - name: Set up Node.js
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
-        uses: actions/setup-node@v6
+      - name: Plan scenes and verify one new female presenter
+        if: steps.preflight.outputs.has_input == 'true'
+        id: story
+        run: node worker/staged.mjs plan
+
+      - name: Save plan and presenter
+        if: steps.preflight.outputs.has_input == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: story-plan-${{ github.run_id }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+          path: |
+            _stage/plan.json
+            _stage/presenter.jpg
+            _stage/.presenter-history.json
+
+  images:
+    name: images batch ${{ matrix.batch }}
+    needs: plan
+    if: needs.plan.outputs.has_input == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        batch: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
+      CF_BATCH_INDEX: ${{ matrix.batch }}
+      CF_IMAGE_ROUND: "0"
+      CF_BATCH_BUDGET_MIN: "90"
+      CF_IMG_CONCURRENCY: "1"
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+      CF_IMAGE_REQUEST_TIMEOUT_MS: "90000"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: story-plan-${{ github.run_id }}
+          path: _stage
+      - name: Generate and checkpoint image batch
+        run: node worker/staged.mjs images
+      - name: Save image checkpoint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: images-r0-${{ matrix.batch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: _stage/assets
 
+  images_retry_1:
+    name: image repair 1 batch ${{ matrix.batch }}
+    needs: [plan, images]
+    if: needs.plan.outputs.has_input == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        batch: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
+      CF_BATCH_INDEX: ${{ matrix.batch }}
+      CF_IMAGE_ROUND: "1"
+      CF_BATCH_BUDGET_MIN: "90"
+      CF_IMG_CONCURRENCY: "1"
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+      CF_IMAGE_REQUEST_TIMEOUT_MS: "90000"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: story-plan-${{ github.run_id }}
+          path: _stage
+      - uses: actions/download-artifact@v8
+        with:
+          name: images-r0-${{ matrix.batch }}
+          path: _stage/assets
+      - name: Retry only missing images
+        run: node worker/staged.mjs images
+      - name: Save repaired image checkpoint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: images-r1-${{ matrix.batch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: _stage/assets
+
+  images_retry_2:
+    name: image repair 2 batch ${{ matrix.batch }}
+    needs: [plan, images_retry_1]
+    if: needs.plan.outputs.has_input == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        batch: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
+      CF_BATCH_INDEX: ${{ matrix.batch }}
+      CF_IMAGE_ROUND: "2"
+      CF_BATCH_BUDGET_MIN: "90"
+      CF_IMG_CONCURRENCY: "1"
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+      CF_IMAGE_REQUEST_TIMEOUT_MS: "90000"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: story-plan-${{ github.run_id }}
+          path: _stage
+      - uses: actions/download-artifact@v8
+        with:
+          name: images-r1-${{ matrix.batch }}
+          path: _stage/assets
+      - name: Retry remaining images
+        run: node worker/staged.mjs images
+      - name: Save final image checkpoint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: images-r2-${{ matrix.batch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: _stage/assets
+
+  narration:
+    needs: plan
+    if: needs.plan.outputs.has_input == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
+      CF_NARRATION_BUDGET_MIN: "150"
+      CF_TTS_CONCURRENCY: "4"
+      CF_EDGE_VOICE: en-US-JennyNeural
+      CF_EDGE_RATE: "-5%"
+      CF_EDGE_PITCH: "+0Hz"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: story-plan-${{ github.run_id }}
+          path: _stage
       - name: Install ffmpeg
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Jenny narration dependencies
+        run: python3 -m pip install --upgrade edge-tts
+      - name: Generate Jenny narration checkpoint
+        run: node worker/staged.mjs narration
+      - name: Save narration checkpoint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: narration-r0
+          if-no-files-found: error
+          retention-days: 14
+          path: _stage/assets
 
-      - name: Install narration + caption deps (edge-tts, pillow)
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
+  narration_retry:
+    needs: [plan, narration]
+    if: needs.plan.outputs.has_input == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
+      CF_NARRATION_BUDGET_MIN: "150"
+      CF_TTS_CONCURRENCY: "4"
+      CF_EDGE_VOICE: en-US-JennyNeural
+      CF_EDGE_RATE: "-5%"
+      CF_EDGE_PITCH: "+0Hz"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: story-plan-${{ github.run_id }}
+          path: _stage
+      - uses: actions/download-artifact@v8
+        with:
+          name: narration-r0
+          path: _stage/assets
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Jenny narration dependencies
+        run: python3 -m pip install --upgrade edge-tts
+      - name: Retry only missing Jenny narration
+        run: node worker/staged.mjs narration
+      - name: Save final narration checkpoint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: narration-r1
+          if-no-files-found: error
+          retention-days: 14
+          path: _stage/assets
+
+  assemble:
+    needs: [plan, images_retry_2, narration_retry]
+    if: needs.plan.outputs.has_input == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CF_INPUT: ${{ github.workspace }}/content
+      CF_OUTPUT: ${{ github.workspace }}/_render
+      CF_STAGE_ROOT: ${{ github.workspace }}/_stage
+      CF_STAGED_ASSET_DIR: ${{ github.workspace }}/_stage
+      CF_ONLY_FILE: ${{ needs.plan.outputs.script_file }}
+      CF_STYLE: story
+      CF_SCENE_SECONDS: "6"
+      CF_HD_MAX_MINUTES: "35"
+      CF_SHORT_SCENE_SECONDS: "4.5"
+      CF_WIDTH: "1920"
+      CF_HEIGHT: "1080"
+      CF_MAX_SCENES: "600"
+      CF_REQUIRE_INPUT: "1"
+      CF_TTS_PROVIDER: edge
+      CF_EDGE_VOICE: en-US-JennyNeural
+      CF_EDGE_RATE: "-5%"
+      CF_EDGE_PITCH: "+0Hz"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CF_REQUIRE_ANTHROPIC: "1"
+      CF_SEO: "0"
+      CF_CHARACTERS: "0"
+      CF_SCENE_VISUALS: "0"
+      CF_SEO_MODEL: claude-haiku-4-5-20251001
+      CF_IMAGE_TOKEN: ${{ secrets.CF_IMAGE_TOKEN }}
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      CF_YT_PRIVACY: ${{ vars.CF_YT_PRIVACY || 'private' }}
+      CF_THUMBNAILS: "1"
+      CF_REQUIRE_THUMBNAIL: "1"
+
+    steps:
+      - name: Check out latest repository state
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: story-plan-${{ github.run_id }}
+          path: _stage
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: images-r2-*
+          merge-multiple: true
+          path: _stage/assets
+      - uses: actions/download-artifact@v8
+        with:
+          name: narration-r1
+          path: _stage/assets
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Jenny narration and caption dependencies
         run: python3 -m pip install --upgrade edge-tts pillow
-
-      - name: Render new folktales and upload to YouTube
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
+      - name: Verify every staged asset
+        run: node worker/staged.mjs verify
+      - name: Assemble, validate, and upload privately
         working-directory: worker
         run: node watch.mjs --once
-
-      - name: Save rendered videos as a downloadable artifact
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
+      - name: Preserve presenter history with final artifacts
+        run: cp _stage/.presenter-history.json _render/.presenter-history.json
+      - name: Save completed video and thumbnail
         uses: actions/upload-artifact@v7
         with:
           name: folktale-videos
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
           path: |
             _render/*.mp4
             _render/*-thumbnail.jpg
             _render/*.txt
             _render/.presenter-history.json
-
-      - name: Commit published tales and ledger
-        if: env.HAS_YT == 'true' && steps.preflight.outputs.has_input == 'true'
+      - name: Commit published script and ledger
         run: |
-          git config user.name  "griot-studio-bot"
+          git config user.name "griot-studio-bot"
           git config user.email "actions@github.com"
           git add content/
           if git diff --cached --quiet; then
-            echo "No new tales were published."
+            echo "No new tale was published."
           else
-            git commit -m "chore: publish folktale(s) [skip ci]"
-            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git commit -m "chore: publish folktale [skip ci]"
+            git pull --rebase --autostash origin "${{ github.event.repository.default_branch }}"
             git push
+          fi
+      - name: Queue the next waiting script
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if find content -maxdepth 1 -type f \( -name '*.txt' -o -name '*.csv' \) ! -name '_*' ! -name '.*' | grep -q .; then
+            gh workflow run publish.yml --ref "${{ github.event.repository.default_branch }}"
           fi
