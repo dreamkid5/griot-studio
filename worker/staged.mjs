@@ -15,7 +15,7 @@ import {
   planStory,
   probeDuration
 } from "./render.mjs";
-import { generateUniqueFemalePresenter } from "./presenter.mjs";
+import { generateUniqueFemalePresenter, normalizePresenterAgeProfile } from "./presenter.mjs";
 
 try { process.loadEnvFile(); } catch (error) { /* .env is optional */ }
 
@@ -142,6 +142,7 @@ export async function createPlan() {
     style: job.style || cfg.style,
     voice: LOCKED_NARRATOR_VOICE,
     presenterIdentity: presenter.identity,
+    presenterAge: presenter.ageProfile,
     batchSize,
     batchCount,
     createdAt: new Date().toISOString()
@@ -156,7 +157,8 @@ export async function createPlan() {
   });
   log(
     `planned ${planned.scenes.length} scenes as ${batchCount} image batches; ` +
-    `presenter ${presenter.identity}; narrator ${LOCKED_NARRATOR_VOICE}`
+    `presenter ${presenter.identity}, age ${presenter.ageProfile.targetAge} ` +
+    `(${presenter.ageProfile.source}); narrator ${LOCKED_NARRATOR_VOICE}`
   );
   return plan;
 }
@@ -306,6 +308,9 @@ export async function generateNarration() {
 export async function verifyAssets() {
   const plan = await readPlan();
   const cfg = makeConfig();
+  if (!normalizePresenterAgeProfile(plan.presenterAge)) {
+    throw new Error("verified presenter age profile is missing or invalid");
+  }
   const missingImages = [];
   const missingNarration = [];
   for (let i = 0; i < plan.scenes.length; i++) {
@@ -321,7 +326,10 @@ export async function verifyAssets() {
       `${missingNarration.length} Jenny narration segment(s) are missing`
     );
   }
-  log(`asset validation passed: ${plan.scenes.length} images, ${plan.scenes.length} Jenny narration segments`);
+  log(
+    `asset validation passed: presenter age ${plan.presenterAge.targetAge}, ` +
+    `${plan.scenes.length} images, ${plan.scenes.length} Jenny narration segments`
+  );
   return { images: plan.scenes.length, narration: plan.scenes.length };
 }
 

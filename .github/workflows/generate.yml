@@ -8,7 +8,7 @@ name: Generate folktale videos (download only)
 # can tweak a script and generate again.
 #
 # Secrets:
-#   ANTHROPIC_API_KEY   required only to verify the female presenter
+#   ANTHROPIC_API_KEY   required to resolve and verify the female presenter's age
 #   CF_IMAGE_TOKEN      optional; provides higher image-generation limits
 
 on:
@@ -58,7 +58,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Validate inputs and required presenter verification
+      - name: Validate inputs and required age-matched presenter verification
         run: node worker/preflight.mjs
 
       - name: Restore presenter uniqueness history

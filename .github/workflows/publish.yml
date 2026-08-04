@@ -82,7 +82,7 @@ jobs:
           restore-keys: |
             presenter-history-
 
-      - name: Plan scenes and verify one new female presenter
+      - name: Plan scenes and verify one age-matched female presenter
         if: steps.preflight.outputs.has_input == 'true'
         id: story
         run: node worker/staged.mjs plan

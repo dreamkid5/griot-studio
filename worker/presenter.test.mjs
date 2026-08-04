@@ -6,7 +6,10 @@ import test from "node:test";
 
 import {
   newFemalePresenterIdentity,
+  normalizePresenterAgeProfile,
+  presenterAgeAssessmentMatches,
   presenterAssessmentApproved,
+  resolvePresenterAgeProfile,
   validateFemalePresenterImage
 } from "./presenter.mjs";
 import { femaleVoice, LOCKED_NARRATOR_VOICE } from "./render.mjs";
@@ -15,11 +18,83 @@ test("every presenter prompt requires a white adult woman and excludes men", () 
   for (let i = 0; i < 12; i++) {
     const profile = newFemalePresenterIdentity({
       title: "Regression check " + i,
-      script: "A story whose characters must never determine the presenter."
+      script: "My name is Claire. I was forty two when this happened.",
+      presenterAge: {
+        targetAge: 42,
+        minAge: 42,
+        maxAge: 42,
+        source: "explicit",
+        confidence: "high",
+        evidence: "I was forty two when this happened."
+      }
     });
     assert.match(profile.prompt, /adult white European woman presenter/i);
+    assert.match(profile.prompt, /exactly 42 years old/i);
     assert.match(profile.prompt, /white female presenter only/i);
     assert.match(profile.prompt, /no man, no male person/i);
+  }
+});
+
+test("presenter age profiles reject children, broad guesses, and low confidence", () => {
+  const valid = normalizePresenterAgeProfile({
+    target_age: 52,
+    min_age: 52,
+    max_age: 52,
+    source: "explicit",
+    confidence: "high",
+    evidence: "I was fifty two when this happened."
+  });
+  assert.deepEqual(valid, {
+    targetAge: 52,
+    minAge: 52,
+    maxAge: 52,
+    source: "explicit",
+    confidence: "high",
+    evidence: "I was fifty two when this happened."
+  });
+  assert.equal(normalizePresenterAgeProfile({ ...valid, targetAge: 17, minAge: 17, maxAge: 17 }), null);
+  assert.equal(normalizePresenterAgeProfile({ ...valid, minAge: 30, maxAge: 50, targetAge: 40 }), null);
+  assert.equal(normalizePresenterAgeProfile({ ...valid, confidence: "low" }), null);
+});
+
+test("script analysis targets the narrator's main-event age", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    assert.match(request.messages[0].content, /not the age of her husband, child, mother, mother-in-law/i);
+    return {
+      status: 200,
+      ok: true,
+      async json() {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              resolved: true,
+              target_age: 36,
+              min_age: 36,
+              max_age: 36,
+              source: "explicit",
+              confidence: "high",
+              evidence: "I was thirty six when this happened."
+            })
+          }]
+        };
+      }
+    };
+  };
+  try {
+    const age = await resolvePresenterAgeProfile({
+      title: "House story",
+      script: "My name is Claire. I was thirty six when this happened. My mother-in-law was seventy."
+    }, {
+      anthropicKey: "test-key",
+      seoModel: "test-model"
+    });
+    assert.equal(age.targetAge, 36);
+    assert.equal(age.source, "explicit");
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -31,6 +106,14 @@ test("every narration request resolves to Jenny", () => {
 });
 
 test("visual validation accepts only one verified white adult woman", () => {
+  const requiredAge = {
+    targetAge: 52,
+    minAge: 52,
+    maxAge: 52,
+    source: "explicit",
+    confidence: "high",
+    evidence: "I was fifty two."
+  };
   const approved = {
     person_count: 1,
     adult_woman: true,
@@ -38,9 +121,13 @@ test("visual validation accepts only one verified white adult woman", () => {
     man_present: false,
     photorealistic: true,
     face_visible: true,
-    presenter_framing: true
+    presenter_framing: true,
+    estimated_age_min: 49,
+    estimated_age_max: 55,
+    age_matches_required_range: true
   };
-  assert.equal(presenterAssessmentApproved(approved), true);
+  assert.equal(presenterAssessmentApproved(approved, requiredAge), true);
+  assert.equal(presenterAgeAssessmentMatches(approved, requiredAge), true);
 
   for (const invalid of [
     { ...approved, person_count: 2 },
@@ -49,9 +136,11 @@ test("visual validation accepts only one verified white adult woman", () => {
     { ...approved, man_present: true },
     { ...approved, photorealistic: false },
     { ...approved, face_visible: false },
-    { ...approved, presenter_framing: false }
+    { ...approved, presenter_framing: false },
+    { ...approved, age_matches_required_range: false },
+    { ...approved, estimated_age_min: 27, estimated_age_max: 34 }
   ]) {
-    assert.equal(presenterAssessmentApproved(invalid), false);
+    assert.equal(presenterAssessmentApproved(invalid, requiredAge), false);
   }
 });
 
@@ -78,6 +167,9 @@ test("the image itself must pass two independent API inspections", async () => {
               photorealistic: true,
               face_visible: true,
               presenter_framing: true,
+              estimated_age_min: 33,
+              estimated_age_max: 39,
+              age_matches_required_range: true,
               reason: "verified"
             })
           }]
@@ -90,6 +182,13 @@ test("the image itself must pass two independent API inspections", async () => {
     const result = await validateFemalePresenterImage(imagePath, {
       anthropicKey: "test-key",
       seoModel: "test-model"
+    }, {
+      targetAge: 36,
+      minAge: 36,
+      maxAge: 36,
+      source: "explicit",
+      confidence: "high",
+      evidence: "I was thirty six."
     });
     assert.equal(result.approved, true);
     assert.equal(calls, 2);
@@ -110,6 +209,13 @@ test("validator outages are treated as infrastructure failures, not bad presente
     const result = await validateFemalePresenterImage(imagePath, {
       anthropicKey: "invalid-test-key",
       seoModel: "test-model"
+    }, {
+      targetAge: 36,
+      minAge: 36,
+      maxAge: 36,
+      source: "explicit",
+      confidence: "high",
+      evidence: "I was thirty six."
     });
     assert.equal(result.approved, false);
     assert.equal(result.infrastructureFailure, true);
@@ -140,4 +246,11 @@ test("presenter generation requires two visual checks and remembers rejected ima
   assert.match(presenterSource, /presenter verification could not run/);
   assert.match(presenterSource, /rejectedHashes/);
   assert.match(presenterSource, /validateFemalePresenterImage/);
+  assert.match(presenterSource, /presenter age could not be resolved from the script/);
+});
+
+test("the final renderer refuses a staged presenter without an age profile", async () => {
+  const renderSource = await fs.readFile(new URL("./render.mjs", import.meta.url), "utf8");
+  assert.match(renderSource, /staged presenter age profile is missing; refusing to render/);
+  assert.match(renderSource, /validateFemalePresenterImage\(presenter, cfg, stagedPlan\.presenterAge\)/);
 });

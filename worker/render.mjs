@@ -537,13 +537,19 @@ export async function renderJob(job, cfg, workDir, outFile) {
       if (!presenterStat || presenterStat.size < 1000) {
         throw new Error("staged female presenter is missing; refusing to render");
       }
-      const validation = await validateFemalePresenterImage(presenter, cfg);
+      if (!stagedPlan.presenterAge) {
+        throw new Error("staged presenter age profile is missing; refusing to render");
+      }
+      const validation = await validateFemalePresenterImage(presenter, cfg, stagedPlan.presenterAge);
       if (!validation.approved) {
         throw new Error("staged female presenter failed final verification: " + validation.reason);
       }
       job.presenterFile = presenter;
       job.gender = "female";
-      cfg.log("  presenter: verified staged female identity " + stagedPlan.presenterIdentity + " (left)");
+      cfg.log(
+        "  presenter: verified staged female identity " + stagedPlan.presenterIdentity +
+        ", age " + stagedPlan.presenterAge.targetAge + " (left)"
+      );
     } else {
       const generatedPresenter = await generateUniqueFemalePresenter({
         job,
